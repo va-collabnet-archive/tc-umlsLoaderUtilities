@@ -10,6 +10,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<convertersCommonCode.version>2.2-SNAPSHOT</convertersCommonCode.version>
 	</properties>
 
 	<!--scm>
@@ -23,6 +24,16 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<version>1.3.171</version>
+		</dependency>
+		<dependency>
+			<groupId>org.jdom</groupId>
+			<artifactId>jdom2</artifactId>
+			<version>2.0.5</version>
+		</dependency>
+		<dependency>
+			<groupId>gov.va.oia.terminology.converters</groupId>
+			<artifactId>convertersCommonCode</artifactId>
+			<version>${convertersCommonCode.version}</version>
 		</dependency>
 	</dependencies>
 

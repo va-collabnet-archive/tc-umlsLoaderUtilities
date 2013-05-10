@@ -1,13 +1,23 @@
 package gov.va.oia.terminology.converters.umlsUtils;
 
+import gov.va.oia.terminology.converters.sharedUtils.ConsoleUtil;
 import gov.va.oia.terminology.converters.umlsUtils.sql.ColumnDefinition;
 import gov.va.oia.terminology.converters.umlsUtils.sql.DataType;
 import gov.va.oia.terminology.converters.umlsUtils.sql.TableDefinition;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.input.SAXBuilder;
 
 public class RRFDatabaseHandle
 {
@@ -55,6 +65,142 @@ public class RRFDatabaseHandle
 	public void shutdown() throws SQLException
 	{
 		connection_.close();
+	}
+	
+	/**
+	 * Create a set of tables that from an XML file that matches the schema DatabaseDefinition.xsd
+	 */
+	public List<TableDefinition> loadTableDefinitionsFromXML(InputStream is) throws Exception
+	{
+		SAXBuilder builder = new SAXBuilder();
+		Document d = builder.build(is);
+		Element root = d.getRootElement();
+
+		ArrayList<TableDefinition> tables = new ArrayList<>();
+		for (Element table : root.getChildren())
+		{
+			TableDefinition td = new TableDefinition(table.getAttributeValue("name"));
+			for (Element column : table.getChildren())
+			{
+				Integer size = null;
+				if (column.getAttributeValue("size") != null)
+				{
+					size = Integer.parseInt(column.getAttributeValue("size"));
+				}
+				Boolean allowNull = null;
+				if (column.getAttributeValue("allowNull") != null)
+				{
+					allowNull = Boolean.valueOf(column.getAttributeValue("allowNull"));
+				}
+				td.addColumn(new ColumnDefinition(column.getAttributeValue("name"), new DataType(column.getAttributeValue("type"), size, allowNull)));
+			}
+			tables.add(td);
+			createTable(td);
+		}
+		is.close();
+		return tables;
+	}
+	
+	public void loadDataIntoTable(TableDefinition td, UMLSFileReader data) throws SQLException, IOException
+	{
+		ConsoleUtil.println("Creating table " + td.getTableName());
+		StringBuilder insert = new StringBuilder();
+		insert.append("INSERT INTO ");
+		insert.append(td.getTableName());
+		insert.append("(");
+		for (ColumnDefinition cd : td.getColumns())
+		{
+			insert.append(cd.getColumnName());
+			insert.append(",");
+		}
+		insert.setLength(insert.length() - 1);
+		insert.append(") VALUES (");
+		for (int i = 0; i < td.getColumns().size(); i++)
+		{
+			insert.append("?,");
+		}
+		insert.setLength(insert.length() - 1);
+		insert.append(")");
+
+		PreparedStatement ps = connection_.prepareStatement(insert.toString());
+
+		ConsoleUtil.println("Loading table " + td.getTableName());
+
+		int rowCount = 0;
+		while (data.hasNextRow())
+		{
+			List<String> cols = data.getNextRow();
+			if (cols.size() != td.getColumns().size())
+			{
+				throw new RuntimeException("Data length mismatch!");
+			}
+
+			ps.clearParameters();
+			int psIndex = 1;
+			
+			for (String s : cols)
+			{
+				DataType colType = td.getColumns().get(psIndex - 1).getDataType();
+				if (colType.isBoolean())
+				{
+					if (s == null || s.length() == 0)
+					{
+						ps.setNull(psIndex, Types.BOOLEAN);
+					}
+					else
+					{
+						ps.setBoolean(psIndex, Boolean.valueOf(s));
+					}
+				}
+				else if (colType.isInteger())
+				{
+					if (s == null || s.length() == 0)
+					{
+						ps.setNull(psIndex, Types.INTEGER);
+					}
+					else
+					{
+						ps.setInt(psIndex, Integer.parseInt(s));
+					}
+				}
+				else if (colType.isLong())
+				{
+					if (s == null || s.length() == 0)
+					{
+						ps.setNull(psIndex, Types.BIGINT);
+					}
+					else
+					{
+						ps.setLong(psIndex, Long.parseLong(s));
+					}
+				}
+				else if (colType.isString())
+				{
+					if (s == null || s.length() == 0)
+					{
+						ps.setNull(psIndex, Types.VARCHAR);
+					}
+					else
+					{
+						ps.setString(psIndex, s);
+					}
+				}
+				else
+				{
+					throw new RuntimeException("Unsupported data type");
+				}
+				psIndex++;
+			}
+			ps.execute();
+			rowCount++;
+			if (rowCount % 10 == 0)
+			{
+				ConsoleUtil.showProgress();
+			}
+		}
+		ps.close();
+		data.close();
+		ConsoleUtil.println("Loaded " + rowCount + " rows");
 	}
 
 	public static void main(String[] args) throws ClassNotFoundException, SQLException
