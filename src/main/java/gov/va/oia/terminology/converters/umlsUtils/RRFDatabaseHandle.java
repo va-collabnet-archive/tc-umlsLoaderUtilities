@@ -24,11 +24,20 @@ public class RRFDatabaseHandle
 	Connection connection_;
 
 	/**
-	 * If file provided, created there, otherwise, in memory.
-	 * 
+	 * If file provided, created or opened at that path.  If file is null, an in-memory db is created.
+	 * Returns false if the database already existed, true if it was newly created.
 	 */
-	public void createDatabase(File dbFile) throws ClassNotFoundException, SQLException
+	public boolean createOrOpenDatabase(File dbFile) throws ClassNotFoundException, SQLException
 	{
+		boolean createdNew = true;
+		if (dbFile != null)
+		{
+			File temp = new File(dbFile.getParentFile(), dbFile.getName() + ".h2.db");
+			if (temp.exists())
+			{
+				createdNew = false;
+			}
+		}
 		Class.forName("org.h2.Driver");
 		if (dbFile == null)
 		{
@@ -38,6 +47,7 @@ public class RRFDatabaseHandle
 		{
 			connection_ = DriverManager.getConnection("jdbc:h2:" + dbFile.getAbsolutePath() +";LOG=0;CACHE_SIZE=512000;LOCK_MODE=0;");
 		}
+		return createdNew;
 	}
 	
 	public void createTable(TableDefinition td) throws SQLException
@@ -206,7 +216,7 @@ public class RRFDatabaseHandle
 	public static void main(String[] args) throws ClassNotFoundException, SQLException
 	{
 		RRFDatabaseHandle rrf = new RRFDatabaseHandle();
-		rrf.createDatabase(new File("/mnt/SSD/scratch/h2Test"));
+		rrf.createOrOpenDatabase(new File("/mnt/SSD/scratch/h2Test"));
 		
 		TableDefinition td = new TableDefinition("Test");
 		td.addColumn(new ColumnDefinition("testcol", new DataType("STRING", 50, true)));
