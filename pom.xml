@@ -10,7 +10,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<convertersCommonCode.version>2.2-SNAPSHOT</convertersCommonCode.version>
+		<convertersCommonCode.version>2.3-SNAPSHOT</convertersCommonCode.version>
 	</properties>
 
 	<!--scm>
