@@ -4,9 +4,12 @@ import gov.va.oia.terminology.converters.sharedUtils.ConsoleUtil;
 import gov.va.oia.terminology.converters.umlsUtils.sql.ColumnDefinition;
 import gov.va.oia.terminology.converters.umlsUtils.sql.DataType;
 import gov.va.oia.terminology.converters.umlsUtils.sql.TableDefinition;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -14,6 +17,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import org.jdom2.Document;
 import org.jdom2.Element;
@@ -55,7 +60,12 @@ public class RRFDatabaseHandle
 		Statement s = connection_.createStatement();
 		
 		StringBuilder sql = new StringBuilder();
-		sql.append("CREATE TABLE " + td.getTableName() + " (");
+		String tableName = td.getTableName();
+		if (tableName.indexOf('/') > 0)
+		{
+			tableName = tableName.substring(tableName.indexOf('/') + 1);
+		}
+		sql.append("CREATE TABLE " + tableName + " (");
 		for (ColumnDefinition cd : td.getColumns())
 		{
 			sql.append(cd.asH2());
@@ -64,6 +74,7 @@ public class RRFDatabaseHandle
 		sql.setLength(sql.length() - 1);
 		sql.append(")");
 		
+		ConsoleUtil.println("Creating Table " + tableName);
 		s.executeUpdate(sql.toString());
 	}
 	
@@ -75,6 +86,95 @@ public class RRFDatabaseHandle
 	public void shutdown() throws SQLException
 	{
 		connection_.close();
+	}
+	
+	/**
+	 * Create a set of tables that from the UMLS supplied MRCOLS
+	 */
+	public List<TableDefinition> loadTableDefinitionsFromMRCOLS(InputStream MRFILES, InputStream MRCOLS, HashSet<String> filesToSkip) throws Exception
+	{
+		//MRFILEs contains fileName/Description/Comma sep col list/col count/row count/byte count
+		//MRCOLs contains: col name/description/doc section number/MIN char/AV char/MAX char/fileName/dataType
+		
+		filesToSkip.add("MRFILES.RRF");
+		filesToSkip.add("MRCOLS.RRF");
+		
+		ArrayList<String> prefixSkips = new ArrayList<>();
+		for (String s : filesToSkip)
+		{
+			if (s.endsWith("*"))
+			{
+				prefixSkips.add(s.substring(0, s.length() - 1));
+			}
+		}
+		
+		ArrayList<String[]> mrFile = new ArrayList<>();
+		
+		BufferedReader br = new BufferedReader(new InputStreamReader(MRFILES));
+		String line = br.readLine();
+		while (line != null)
+		{
+			String[] temp = line.split("\\|");
+			if (temp.length > 0)
+			{
+				mrFile.add(temp);
+			}
+			line = br.readLine();
+		}
+		br.close();
+		
+		//Filename -> col -> datatype
+		HashMap<String, HashMap<String, String>> mrCol = new HashMap<>();
+		
+		br = new BufferedReader(new InputStreamReader(MRCOLS));
+		line = br.readLine();
+		while (line != null)
+		{
+			String[] temp = line.split("\\|");
+			if (temp.length > 0)
+			{
+				HashMap<String, String> nested = mrCol.get(temp[6]);
+				if (nested == null)
+				{
+					nested = new HashMap<String, String>();
+					mrCol.put(temp[6], nested);
+				}
+				nested.put(temp[0], temp[7]);
+			}
+			line = br.readLine();
+		}
+		br.close();
+		
+		ArrayList<TableDefinition> tables = new ArrayList<>();
+		for (String[] table : mrFile)
+		{
+			String fileName = table[0];
+			boolean skip = false;
+			for (String prefix : prefixSkips)
+			{
+				if (fileName.startsWith(prefix))
+				{
+					skip = true;
+					break;
+				}
+			}
+			
+			if (skip || filesToSkip.contains(fileName))
+			{
+				continue;
+			}
+			TableDefinition td = new TableDefinition(fileName.substring(0, fileName.indexOf('.')));
+			HashMap<String, String> cols = mrCol.get(fileName);
+			for (String col : table[2].split(","))
+			{
+				td.addColumn(new ColumnDefinition(col, new DataType(cols.get(col), null)));
+			}
+			tables.add(td);
+			createTable(td);
+		}
+		MRFILES.close();
+		MRCOLS.close();
+		return tables;
 	}
 	
 	/**
@@ -111,12 +211,17 @@ public class RRFDatabaseHandle
 		return tables;
 	}
 	
-	public void loadDataIntoTable(TableDefinition td, UMLSFileReader data) throws SQLException, IOException
+	public void loadDataIntoTable(TableDefinition td, UMLSFileReader data, HashSet<String> SABFilter) throws SQLException, IOException
 	{
-		ConsoleUtil.println("Creating table " + td.getTableName());
+		ConsoleUtil.println("Loading table " + td.getTableName());
 		StringBuilder insert = new StringBuilder();
 		insert.append("INSERT INTO ");
-		insert.append(td.getTableName());
+		String tableName = td.getTableName();
+		if (tableName.indexOf('/') > 0)
+		{
+			tableName = tableName.substring(tableName.indexOf('/') + 1);
+		}
+		insert.append(tableName);
 		insert.append("(");
 		for (ColumnDefinition cd : td.getColumns())
 		{
@@ -133,16 +238,40 @@ public class RRFDatabaseHandle
 		insert.append(")");
 
 		PreparedStatement ps = connection_.prepareStatement(insert.toString());
-
-		ConsoleUtil.println("Loading table " + td.getTableName());
+		
+		int sabFilterColumn = -1;
+		if (SABFilter != null && SABFilter.size() > 0)
+		{
+			int pos = 0;
+			//Find the SAB column in this table, if it has one.
+			for (ColumnDefinition cd : td.getColumns())
+			{
+				if (cd.getColumnName().equals("SAB"))
+				{
+					sabFilterColumn = pos;
+					break;
+				}
+				pos++;
+			}
+		}
 
 		int rowCount = 0;
+		int sabSkipCount = 0;
 		while (data.hasNextRow())
 		{
 			List<String> cols = data.getNextRow();
 			if (cols.size() != td.getColumns().size())
 			{
 				throw new RuntimeException("Data length mismatch!");
+			}
+			
+			if (sabFilterColumn >= 0)
+			{
+				if (!SABFilter.contains(cols.get(sabFilterColumn)))
+				{
+					sabSkipCount++;
+					continue;
+				}
 			}
 
 			ps.clearParameters();
@@ -195,6 +324,17 @@ public class RRFDatabaseHandle
 						ps.setString(psIndex, s);
 					}
 				}
+				else if (colType.isBigDecimal())
+				{
+					if (s == null || s.length() == 0)
+					{
+						ps.setNull(psIndex, Types.DECIMAL);
+					}
+					else
+					{
+						ps.setBigDecimal(psIndex, new BigDecimal(s));
+					}
+				}
 				else
 				{
 					throw new RuntimeException("Unsupported data type");
@@ -203,7 +343,7 @@ public class RRFDatabaseHandle
 			}
 			ps.execute();
 			rowCount++;
-			if (rowCount % 10 == 0)
+			if (rowCount % 10000 == 0)
 			{
 				ConsoleUtil.showProgress();
 			}
@@ -211,6 +351,10 @@ public class RRFDatabaseHandle
 		ps.close();
 		data.close();
 		ConsoleUtil.println("Loaded " + rowCount + " rows");
+		if (sabSkipCount > 0)
+		{
+			ConsoleUtil.println("Skipped " + sabSkipCount+ " rows for not matching the SAB filter");
+		}
 	}
 
 	public static void main(String[] args) throws ClassNotFoundException, SQLException
