@@ -60,13 +60,13 @@ public abstract class BaseConverter
 	private boolean appendToOutputFile_;
 	protected String sab_;
 	
-	UUID metaDataRoot_;
+	protected UUID metaDataRoot_;
 	
 	
 	protected BaseConverter(String sab, String terminologyName, RRFDatabaseHandle db, String tablePrefix, File outputDirectory, boolean appendToOutputFile, PropertyType ids, PropertyType attributes) throws Exception
 	{
 		terminologyName_ = terminologyName;
-		namespaceSeed_ = "gov.va.med.term.RRF." + tablePrefix + "." + terminologyName;
+		namespaceSeed_ = "gov.va.med.term.RRF." + tablePrefix + "." + sab;
 		tablePrefix_ = tablePrefix;
 		db_ = db;
 		ptIds_ = ids;
@@ -78,13 +78,14 @@ public abstract class BaseConverter
 		File binaryOutputFile = new File(outputDirectory_, "RRF-" + tablePrefix + ".jbin");
 
 		dos_ = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(binaryOutputFile, appendToOutputFile_)));
-		eConcepts_ = new EConceptUtility(namespaceSeed_, terminologyName_ + " Path", dos_);
+		eConcepts_ = new EConceptUtility(namespaceSeed_, sab_ + " Path", dos_);
 
 		UUID archRoot = ArchitectonicAuxiliary.Concept.ARCHITECTONIC_ROOT_CONCEPT.getPrimoridalUid();
 		metaDataRoot_ = ConverterUUID.createNamespaceUUIDFromString("metadata");
 		eConcepts_.createAndStoreMetaDataConcept(metaDataRoot_, terminologyName_ + " Metadata", false, archRoot, dos_);
 
 		loadCommonMetaData();
+		loadCustomMetaData();
 
 		ConsoleUtil.println("Metadata Statistics");
 		for (String s : eConcepts_.getLoadStats().getSummary())
@@ -97,6 +98,7 @@ public abstract class BaseConverter
 	
 	protected void finish() throws IOException
 	{
+		eConcepts_.storeRefsetConcepts(ptRefsets_, dos_);
 		dos_.close();
 		ConsoleUtil.println("Load Statistics");
 		for (String s : eConcepts_.getLoadStats().getSummary())
@@ -108,6 +110,9 @@ public abstract class BaseConverter
 		ConsoleUtil.println("Dumping UUID Debug File");
 		ConverterUUID.dump(new File(outputDirectory_, "UuidDebugMap.txt"), appendToOutputFile_);
 		ConsoleUtil.writeOutputToFile(new File(outputDirectory_, "ConsoleOutput.txt").toPath(), appendToOutputFile_);
+		ConsoleUtil.clearOutputCache();
+		ConverterUUID.clearCache();
+		ConverterUUID.disableUUIDMap_ = false;  //re-enable it in case someone else uses it and expects default behavior
 	}
 	
 	public static void clearTargetFiles(File outputDirectory)
@@ -117,9 +122,13 @@ public abstract class BaseConverter
 		new File(outputDirectory, "RRF.jbin").delete();
 	}
 	
+	protected abstract void loadCustomMetaData() throws Exception;
+	protected abstract void addCustomRefsets() throws Exception;
+	
 	private void loadCommonMetaData() throws Exception
 	{
 		ptRefsets_ = new PT_Refsets(terminologyName_);
+		addCustomRefsets();
 		ptContentVersion_ = new BPT_ContentVersion();
 		final PropertyType sourceMetadata = new PT_SAB_Metadata();
 		final PropertyType relationshipMetadata = new PT_Relationship_Metadata();
@@ -127,6 +136,7 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptRefsets_, ptContentVersion_, sourceMetadata, relationshipMetadata), metaDataRoot_, dos_);
 		
 		//dynamically add more attributes from *DOC
+		//TODO filter for inuse
 		{
 			Statement s = db_.getConnection().createStatement();
 			ResultSet rs = s.executeQuery("SELECT VALUE, TYPE, EXPL from " + tablePrefix_ + "DOC where DOCKEY = 'ATN'");
@@ -160,6 +170,7 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(ptAttributes_, metaDataRoot_, dos_);
 		
 		//STYPE values
+		//TODO filter for inuse
 		ptSTypes_= new PropertyType("STYPEs"){};
 		{
 			Statement s = db_.getConnection().createStatement();
@@ -212,6 +223,7 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(ptSuppress_, metaDataRoot_, dos_);
 		
 		// Handle the languages
+		//TODO filter for inuse
 		{
 			ptLanguages_ = new PropertyType("Languages"){};
 			Statement s = db_.getConnection().createStatement();
@@ -383,8 +395,15 @@ public abstract class BaseConverter
 		{
 			ptDescriptions_ = new BPT_Descriptions(terminologyName_);
 			Statement s = db_.getConnection().createStatement();
-			//TODO index?
-			ResultSet usedDescTypes = s.executeQuery("select distinct TTY from " + tablePrefix_ + "CONSO");
+			ResultSet usedDescTypes;
+			if (tablePrefix_.equals("RXN"))
+			{
+				usedDescTypes = s.executeQuery("select distinct TTY from RXNCONSO WHERE SAB='" + sab_ + "'");
+			}
+			else
+			{
+				usedDescTypes = s.executeQuery("select distinct TTY from MRRANK WHERE SAB='" + sab_ + "'");
+			}
 
 			PreparedStatement ps = db_.getConnection().prepareStatement("select TYPE, EXPL from " + tablePrefix_ + "DOC where DOCKEY='TTY' and VALUE=?");
 
@@ -395,7 +414,7 @@ public abstract class BaseConverter
 				ResultSet descInfo = ps.executeQuery();
 
 				String expandedForm = null;
-				HashSet<String> classes = new HashSet<>();
+				final HashSet<String> classes = new HashSet<>();
 
 				while (descInfo.next())
 				{
@@ -420,12 +439,25 @@ public abstract class BaseConverter
 				}
 				descInfo.close();
 				ps.clearParameters();
-				makeDescriptionType(tty, expandedForm, classes);
+				Property p = makeDescriptionType(tty, expandedForm, classes);
+				p.registerConceptCreationListener(new ConceptCreationNotificationListener()
+				{
+					@Override
+					public void conceptCreated(Property property, EConcept concept)
+					{
+						for (String tty_class : classes)
+						{
+							eConcepts_.addStringAnnotation(concept, tty_class, ptAttributes_.getProperty("tty_class").getUUID(), false);
+						}
+					}
+				});
+				
 			}
 			usedDescTypes.close();
 			s.close();
 			ps.close();
-
+			allDescriptionsCreated();
+			
 			eConcepts_.loadMetaDataItems(ptDescriptions_, metaDataRoot_, dos_);
 		}
 		
@@ -456,7 +488,6 @@ public abstract class BaseConverter
 			rs.close();
 			s.close();
 
-			allDescriptionsCreated();
 			eConcepts_.loadMetaDataItems(ptSemanticTypes, metaDataRoot_, dos_);
 		}
 		
@@ -466,15 +497,17 @@ public abstract class BaseConverter
 	/**
 	 * Implementer needs to add an entry to ptDescriptions_ with the data provided...
 	 */
-	protected abstract void makeDescriptionType(String fsnName, String preferredName, final Set<String> tty_classes);
+	protected abstract Property makeDescriptionType(String fsnName, String preferredName, final Set<String> tty_classes);
 	
 	/**
 	 * Called just before the description set is actually created as eConcepts (in case the implementor needs to rank them all together)
 	 */
-	protected abstract void allDescriptionsCreated();
+	protected abstract void allDescriptionsCreated() throws Exception;
 	
 	private void loadRelationshipMetadata(final PropertyType relationshipMetadata) throws Exception
 	{
+		//TODO find rel names that are actually in use?
+		
 		//Both of these get added as extra attributes on the relationship definition
 		HashMap<String, String> snomedCTRelaMappings = new HashMap<>(); //Maps something like 'has_specimen_source_morphology' to '118168003'
 		HashMap<String, String> snomedCTRelMappings = new HashMap<>();  //Maps something like '118168003' to 'RO'

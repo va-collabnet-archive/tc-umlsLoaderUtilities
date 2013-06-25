@@ -12,7 +12,6 @@ public class PT_Refsets extends BPT_Refsets
 	public enum Refsets
 	{
 		ALL("All Concepts"),
-		CPC("Current Prescribable Content"),
 		CUI_CONCEPTS("All CUI Concepts"),
 		AUI_CONCEPTS("All AUI Concepts");
 

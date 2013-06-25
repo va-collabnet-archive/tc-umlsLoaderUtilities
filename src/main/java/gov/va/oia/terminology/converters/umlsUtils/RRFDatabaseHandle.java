@@ -17,6 +17,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -211,7 +212,7 @@ public class RRFDatabaseHandle
 		return tables;
 	}
 	
-	public void loadDataIntoTable(TableDefinition td, UMLSFileReader data, HashSet<String> SABFilter) throws SQLException, IOException
+	public void loadDataIntoTable(TableDefinition td, UMLSFileReader data, Collection<String> SABFilterList) throws SQLException, IOException
 	{
 		ConsoleUtil.println("Loading table " + td.getTableName());
 		StringBuilder insert = new StringBuilder();
@@ -240,8 +241,10 @@ public class RRFDatabaseHandle
 		PreparedStatement ps = connection_.prepareStatement(insert.toString());
 		
 		int sabFilterColumn = -1;
-		if (SABFilter != null && SABFilter.size() > 0)
+		HashSet<String> sabHashSet = null;
+		if (SABFilterList != null && SABFilterList.size() > 0)
 		{
+			sabHashSet = new HashSet<>(SABFilterList);
 			int pos = 0;
 			//Find the SAB column in this table, if it has one.
 			for (ColumnDefinition cd : td.getColumns())
@@ -254,6 +257,7 @@ public class RRFDatabaseHandle
 				pos++;
 			}
 		}
+		
 
 		int rowCount = 0;
 		int sabSkipCount = 0;
@@ -267,7 +271,7 @@ public class RRFDatabaseHandle
 			
 			if (sabFilterColumn >= 0)
 			{
-				if (!SABFilter.contains(cols.get(sabFilterColumn)))
+				if (!sabHashSet.contains(cols.get(sabFilterColumn)))
 				{
 					sabSkipCount++;
 					continue;

@@ -305,6 +305,10 @@ public class Relationship
 				{
 					swap = name1.contains("_has");
 				}
+				else if (name1.equals("larger_than") || name2.equals("larger_than"))  //swap smaller_than to primary
+				{
+					swap = name1.equals("larger_than");
+				}
 			}
 		}
 		if (swap == null)
