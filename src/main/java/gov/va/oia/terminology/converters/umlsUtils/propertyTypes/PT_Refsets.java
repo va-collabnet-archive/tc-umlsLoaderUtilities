@@ -9,23 +9,23 @@ import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.Property;
  */
 public class PT_Refsets extends BPT_Refsets
 {
+	//TODO get rid of enum
 	public enum Refsets
 	{
 		ALL("All Concepts"),
 		CUI_CONCEPTS("All CUI Concepts"),
 		AUI_CONCEPTS("All AUI Concepts");
 
-		private Property property;
-
+		String niceName;
 		private Refsets(String niceName)
 		{
 			// Don't know the owner yet - will be autofilled when we add this to the parent, below.
-			property = new Property(null, niceName);
+			this.niceName = niceName;
 		}
 
-		public Property getProperty()
+		public String getPropertyName()
 		{
-			return property;
+			return niceName;
 		}
 	}
 	
@@ -34,7 +34,8 @@ public class PT_Refsets extends BPT_Refsets
 		super(terminologyName);
 		for (Refsets mm : Refsets.values())
 		{
-			addProperty(mm.getProperty());
+			//owner autofiled by addProperty call
+			addProperty(new Property(null, mm.getPropertyName()));
 		}
 	}
 }

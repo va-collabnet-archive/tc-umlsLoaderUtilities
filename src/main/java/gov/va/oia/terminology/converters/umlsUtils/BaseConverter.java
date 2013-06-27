@@ -32,6 +32,9 @@ import java.util.UUID;
 import org.dwfa.cement.ArchitectonicAuxiliary;
 import org.dwfa.util.id.Type3UuidFactory;
 import org.ihtsdo.etypes.EConcept;
+import org.ihtsdo.tk.dto.concept.component.TkComponent;
+import org.ihtsdo.tk.dto.concept.component.refex.type_uuid.TkRefexUuidMember;
+import org.ihtsdo.tk.dto.concept.component.relationship.TkRelationship;
 
 public abstract class BaseConverter
 {
@@ -41,7 +44,7 @@ public abstract class BaseConverter
 	protected PropertyType ptAttributes_;
 	protected PropertyType ptIds_;
 	protected BPT_Refsets ptRefsets_;
-	protected PropertyType ptContentVersion_;
+	protected BPT_ContentVersion ptContentVersion_;
 	protected PropertyType ptSTypes_;
 	protected PropertyType ptSuppress_;
 	protected PropertyType ptLanguages_;
@@ -58,16 +61,22 @@ public abstract class BaseConverter
 	protected String tablePrefix_;
 	protected File outputDirectory_;
 	private boolean appendToOutputFile_;
+	private boolean isRxNorm;
 	protected String sab_;
 	
 	protected UUID metaDataRoot_;
 	
+	PreparedStatement satRelStatement_;
 	
-	protected BaseConverter(String sab, String terminologyName, RRFDatabaseHandle db, String tablePrefix, File outputDirectory, boolean appendToOutputFile, PropertyType ids, PropertyType attributes) throws Exception
+	private HashSet<UUID> loadedRels_ = new HashSet<>();
+	private HashSet<UUID> skippedRels_ = new HashSet<>();
+	
+	protected BaseConverter(String sab, String terminologyName, String pathPrefix, RRFDatabaseHandle db, String tablePrefix, File outputDirectory, boolean appendToOutputFile, PropertyType ids, PropertyType attributes) throws Exception
 	{
 		terminologyName_ = terminologyName;
 		namespaceSeed_ = "gov.va.med.term.RRF." + tablePrefix + "." + sab;
 		tablePrefix_ = tablePrefix;
+		isRxNorm = tablePrefix_.equals("RXN");
 		db_ = db;
 		ptIds_ = ids;
 		ptAttributes_ = attributes;
@@ -78,7 +87,7 @@ public abstract class BaseConverter
 		File binaryOutputFile = new File(outputDirectory_, "RRF-" + tablePrefix + ".jbin");
 
 		dos_ = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(binaryOutputFile, appendToOutputFile_)));
-		eConcepts_ = new EConceptUtility(namespaceSeed_, sab_ + " Path", dos_);
+		eConcepts_ = new EConceptUtility(namespaceSeed_, pathPrefix + " Path", dos_);
 
 		UUID archRoot = ArchitectonicAuxiliary.Concept.ARCHITECTONIC_ROOT_CONCEPT.getPrimoridalUid();
 		metaDataRoot_ = ConverterUUID.createNamespaceUUIDFromString("metadata");
@@ -94,10 +103,14 @@ public abstract class BaseConverter
 		}
 
 		eConcepts_.clearLoadStats();
+		satRelStatement_ = db_.getConnection().prepareStatement("select * from " + tablePrefix_ + "SAT where " + (isRxNorm ? "RXAUI" : "METAUI") 
+				+ "= ? and STYPE='RUI' and SAB='" + sab_ + "'");
 	}
 	
-	protected void finish() throws IOException
+	protected void finish() throws IOException, SQLException
 	{
+		checkRelationships();
+		satRelStatement_.close();
 		eConcepts_.storeRefsetConcepts(ptRefsets_, dos_);
 		dos_.close();
 		ConsoleUtil.println("Load Statistics");
@@ -136,12 +149,15 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptRefsets_, ptContentVersion_, sourceMetadata, relationshipMetadata), metaDataRoot_, dos_);
 		
 		//dynamically add more attributes from *DOC
-		//TODO filter for inuse
 		{
+			ConsoleUtil.println("Creating attribute types");
 			Statement s = db_.getConnection().createStatement();
-			ResultSet rs = s.executeQuery("SELECT VALUE, TYPE, EXPL from " + tablePrefix_ + "DOC where DOCKEY = 'ATN'");
+			//extra logic at the end to keep NDC's from any sab when processing RXNorm
+			ResultSet rs = s.executeQuery("SELECT VALUE, TYPE, EXPL from " + tablePrefix_ + "DOC where DOCKEY = 'ATN' and VALUE in (select distinct ATN from " 
+					+ tablePrefix_ + "SAT where SAB='" + sab_ + "'" + (isRxNorm ? " or ATN='NDC'" : "") + ")");
 			while (rs.next())
 			{
+				
 				String abbreviation = rs.getString("VALUE");
 				String type = rs.getString("TYPE");
 				String expansion = rs.getString("EXPL");
@@ -170,9 +186,9 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(ptAttributes_, metaDataRoot_, dos_);
 		
 		//STYPE values
-		//TODO filter for inuse
 		ptSTypes_= new PropertyType("STYPEs"){};
 		{
+			ConsoleUtil.println("Creating STYPE types");
 			Statement s = db_.getConnection().createStatement();
 			ResultSet rs = s.executeQuery("SELECT DISTINCT VALUE, TYPE, EXPL FROM " + tablePrefix_ + "DOC where DOCKEY like 'STYPE%'");
 			while (rs.next())
@@ -194,6 +210,7 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(ptSTypes_, metaDataRoot_, dos_);
 		
 		//SUPPRESS values
+		ConsoleUtil.println("Creating Suppress types");
 		ptSuppress_= new PropertyType("Suppress") {};
 		{
 			Statement s = db_.getConnection().createStatement();
@@ -223,11 +240,12 @@ public abstract class BaseConverter
 		eConcepts_.loadMetaDataItems(ptSuppress_, metaDataRoot_, dos_);
 		
 		// Handle the languages
-		//TODO filter for inuse
 		{
+			ConsoleUtil.println("Creating language types");
 			ptLanguages_ = new PropertyType("Languages"){};
 			Statement s = db_.getConnection().createStatement();
-			ResultSet rs = s.executeQuery("SELECT * from " +tablePrefix_ + "DOC where DOCKEY = 'LAT'");
+			ResultSet rs = s.executeQuery("SELECT * from " + tablePrefix_ + "DOC where DOCKEY = 'LAT' and VALUE in (select distinct LAT from " 
+					+ tablePrefix_ + "CONSO where SAB='" + sab_ + "')");
 			while (rs.next())
 			{
 				String abbreviation = rs.getString("VALUE");
@@ -265,6 +283,7 @@ public abstract class BaseConverter
 		
 		// And Source Restriction Levels
 		{
+			ConsoleUtil.println("Creating Source Restriction Level types");
 			ptSourceRestrictionLevels_ = new PropertyType("Source Restriction Levels"){};
 			PreparedStatement ps = db_.getConnection().prepareStatement("SELECT VALUE, TYPE, EXPL from " + tablePrefix_ + "DOC where DOCKEY=? ORDER BY VALUE");
 			ps.setString(1, "SRL");
@@ -334,69 +353,101 @@ public abstract class BaseConverter
 
 		// And Source vocabularies
 		{
+			ConsoleUtil.println("Creating Source Vocabulary types");
 			ptSABs_ = new PropertyType("Source Vocabularies"){};
+			
+			
+			HashSet<String> sabList = new HashSet<>();
+			sabList.add(sab_);
+			
 			Statement s = db_.getConnection().createStatement();
-			ResultSet rs = s.executeQuery("SELECT SON from " + tablePrefix_ + "SAB where RSAB='" + sab_ + "'");
-			while (rs.next())
+			ResultSet rs;
+			if (isRxNorm)
 			{
-				String son = rs.getString("SON");
-
-				Property p = ptSABs_.addProperty(sab_, son, null);
-				p.registerConceptCreationListener(new ConceptCreationNotificationListener()
+				rs = s.executeQuery("select distinct SAB from RXNSAT where ATN='NDC'");
+				while (rs.next())
 				{
-					@Override
-					public void conceptCreated(Property property, EConcept concept)
-					{
-						try
-						{
-							PreparedStatement getMetadata = db_.getConnection().prepareStatement("Select * from " + tablePrefix_ + "SAB where RSAB = ?");
+					sabList.add(rs.getString("SAB"));
+				}
+				rs.close();
+				s.close();
+			}
+			
+			for (String currentSab : sabList)
+			{
+				s = db_.getConnection().createStatement();
+				rs = s.executeQuery("SELECT SON from " + tablePrefix_ + "SAB WHERE (RSAB='" + currentSab + "' or VSAB='" + currentSab + "')");
+				if (rs.next())
+				{
+					String son = rs.getString("SON");
 
-							//lookup the other columns for the row with this newly added RSAB terminology
-							getMetadata.setString(1, property.getSourcePropertyNameFSN());
-							ResultSet rs = getMetadata.executeQuery();
-							if (rs.next())  //should be only one result
+					Property p = ptSABs_.addProperty(currentSab, son, null);
+					p.registerConceptCreationListener(new ConceptCreationNotificationListener()
+					{
+						@Override
+						public void conceptCreated(Property property, EConcept concept)
+						{
+							try
 							{
-								for (Property metadataProperty : sourceMetadata.getProperties())
+								PreparedStatement getMetadata = db_.getConnection().prepareStatement("Select * from " + tablePrefix_ + "SAB where RSAB = ? or VSAB = ?");
+
+								//lookup the other columns for the row with this newly added RSAB terminology
+								getMetadata.setString(1, property.getSourcePropertyNameFSN());
+								getMetadata.setString(2, property.getSourcePropertyNameFSN());
+								ResultSet rs = getMetadata.executeQuery();
+								if (rs.next())  //should be only one result
 								{
-									String columnName = metadataProperty.getSourcePropertyNameFSN();
-									String columnValue = rs.getString(columnName);
-									if (columnName.equals("SRL"))
+									for (Property metadataProperty : sourceMetadata.getProperties())
 									{
-										eConcepts_.addUuidAnnotation(concept, ptSourceRestrictionLevels_.getProperty(columnValue).getUUID(),
-												metadataProperty.getUUID());
-									}
-									else
-									{
-										eConcepts_.addStringAnnotation(concept, columnValue, metadataProperty.getUUID(), false);
+										String columnName = metadataProperty.getSourcePropertyNameFSN();
+										String columnValue = rs.getString(columnName);
+										if (columnName.equals("SRL"))
+										{
+											eConcepts_.addUuidAnnotation(concept, ptSourceRestrictionLevels_.getProperty(columnValue).getUUID(),
+													metadataProperty.getUUID());
+										}
+										else
+										{
+											eConcepts_.addStringAnnotation(concept, columnValue, metadataProperty.getUUID(), false);
+										}
 									}
 								}
+								if (rs.next())
+								{
+									throw new RuntimeException("Too many sabs.  Perhaps you should be using versioned sabs!");
+								}
+								rs.close();
+								getMetadata.close();
 							}
-							if (rs.next())
+							catch (SQLException e)
 							{
-								throw new RuntimeException("oops!");
+								throw new RuntimeException("Error loading *SAB", e);
 							}
-							rs.close();
-							getMetadata.close();
 						}
-						catch (SQLException e)
-						{
-							throw new RuntimeException("Error loading RXNSAB", e);
-						}
-					}
-				});
+					});
+				}
+				else
+				{
+					throw new RuntimeException("Too few? SABs - perhaps you need to use versioned SABs.");
+				}
+				if (rs.next())
+				{
+					throw new RuntimeException("Too many SABs - perhaps you need to use versioned SABs.");
+				}
+				rs.close();
+				s.close();
 			}
-			rs.close();
-			s.close();
 
 			eConcepts_.loadMetaDataItems(ptSABs_, metaDataRoot_, dos_);
 		}
 
 		// And Descriptions
 		{
+			ConsoleUtil.println("Creating description types");
 			ptDescriptions_ = new BPT_Descriptions(terminologyName_);
 			Statement s = db_.getConnection().createStatement();
 			ResultSet usedDescTypes;
-			if (tablePrefix_.equals("RXN"))
+			if (isRxNorm )
 			{
 				usedDescTypes = s.executeQuery("select distinct TTY from RXNCONSO WHERE SAB='" + sab_ + "'");
 			}
@@ -463,9 +514,9 @@ public abstract class BaseConverter
 		
 		// And semantic types
 		{
+			ConsoleUtil.println("Creating semantic types");
 			PropertyType ptSemanticTypes = new PropertyType("Semantic Types"){};
 			Statement s = db_.getConnection().createStatement();
-			//TODO index?
 			ResultSet rs = s.executeQuery("SELECT distinct TUI, STN, STY from " + tablePrefix_+ "STY");
 			while (rs.next())
 			{
@@ -504,10 +555,11 @@ public abstract class BaseConverter
 	 */
 	protected abstract void allDescriptionsCreated() throws Exception;
 	
+	protected abstract void processSAT(TkComponent<?> itemToAnnotate, ResultSet rs) throws SQLException;
+	
 	private void loadRelationshipMetadata(final PropertyType relationshipMetadata) throws Exception
 	{
-		//TODO find rel names that are actually in use?
-		
+		ConsoleUtil.println("Creating relationship types");
 		//Both of these get added as extra attributes on the relationship definition
 		HashMap<String, String> snomedCTRelaMappings = new HashMap<>(); //Maps something like 'has_specimen_source_morphology' to '118168003'
 		HashMap<String, String> snomedCTRelMappings = new HashMap<>();  //Maps something like '118168003' to 'RO'
@@ -581,12 +633,18 @@ public abstract class BaseConverter
 		rs.close();
 		s.close();
 		
+		HashSet<String> actuallyUsedRelsOrRelas = new HashSet<>();
+		
 		for (Entry<String, String> x : snomedCTRelaMappings.entrySet())
 		{
 			if (!nameToRel_.containsKey(x.getKey()))
 			{
-				//TODO look again
-				ConsoleUtil.println("Notice - No rel for " + x.getKey() + ".");
+				//metamorphosys doesn't seem to remove these when the sct rel types aren't included - just silently remove them 
+				//unless it seems that they should map.
+				if (isRxNorm || sab_.startsWith("SNOMEDCT"))
+				{
+					throw new RuntimeException("ERROR - No rel for " + x.getKey() + ".");
+				}
 				snomedCTRelMappings.remove(x.getValue());
 			}
 			else
@@ -596,6 +654,8 @@ public abstract class BaseConverter
 				if (relType != null)
 				{
 					nameToRel_.get(x.getKey()).addRelType(x.getKey(), relType);
+					//Shouldn't need this, but there are some cases where the metadata is inconsistent - with how it is actually used.
+					actuallyUsedRelsOrRelas.add(relType);
 				}
 			}
 		}
@@ -608,10 +668,28 @@ public abstract class BaseConverter
 		ptRelationships_ = new BPT_Relations(terminologyName_) {};
 		ptRelationshipQualifiers_ = new PropertyType("Relationship Qualifiers") {};
 		
+		s = db_.getConnection().createStatement();
+		rs = s.executeQuery("select distinct REL, RELA from " + tablePrefix_ + "REL where SAB='" + sab_ + "'");
+		while (rs.next())
+		{
+			actuallyUsedRelsOrRelas.add(rs.getString("REL"));
+			if (rs.getString("RELA") != null)
+			{
+				actuallyUsedRelsOrRelas.add(rs.getString("RELA"));
+			}
+		}
+		rs.close();
+		s.close();
+		
 		HashSet<Relationship> uniqueRels = new HashSet<>(nameToRel_.values());
 		for (final Relationship r : uniqueRels)
 		{
 			r.setSwap(db_.getConnection(), tablePrefix_);
+			
+			if (!actuallyUsedRelsOrRelas.contains(r.getFSNName()) && !actuallyUsedRelsOrRelas.contains(r.getInverseFSNName()))
+			{
+				continue;
+			}
 			
 			Property p;
 			if (r.getIsRela())
@@ -673,5 +751,224 @@ public abstract class BaseConverter
 		
 		eConcepts_.loadMetaDataItems(ptRelationships_, metaDataRoot_, dos_);
 		eConcepts_.loadMetaDataItems(ptRelationshipQualifiers_, metaDataRoot_, dos_);
+	}
+	
+	protected void processSemanticTypes(EConcept concept, ResultSet rs) throws SQLException
+	{
+		while (rs.next())
+		{
+			TkRefexUuidMember annotation = eConcepts_.addUuidAnnotation(concept, semanticTypes_.get(rs.getString("TUI")), ptAttributes_.getProperty("STY").getUUID());
+			if (rs.getString("ATUI") != null)
+			{
+				eConcepts_.addStringAnnotation(annotation, rs.getString("ATUI"), ptAttributes_.getProperty("ATUI").getUUID(), false);
+			}
+			if (rs.getObject("CVF") != null)  //might be an int or a string
+			{
+				eConcepts_.addStringAnnotation(annotation, rs.getString("CVF"), ptAttributes_.getProperty("CVF").getUUID(), false);
+			}
+		}
+		rs.close();
+	}
+	
+	
+	/**
+	 * @param isCUI - true for CUI, false for AUI
+	 * @throws SQLException
+	 */
+	protected void addRelationships(EConcept concept, ResultSet rs, boolean lookedUp2) throws SQLException
+	{	
+		while (rs.next())
+		{
+			String cui1 = rs.getString(isRxNorm ? "RXCUI1" : "CUI1");
+			String aui1 = rs.getString(isRxNorm ? "RXAUI1" : "AUI1");
+			String stype1 = rs.getString("STYPE1");
+			String rel = rs.getString("REL");
+			String cui2 = rs.getString(isRxNorm ? "RXCUI2" : "CUI2");
+			String aui2 = rs.getString(isRxNorm ? "RXAUI2" : "AUI2");
+			String stype2 = rs.getString("STYPE2");
+			String rela = rs.getString("RELA");
+			String rui = rs.getString("RUI");
+			String srui = rs.getString("SRUI");
+			String sab = rs.getString("SAB");
+			String sl = rs.getString("SL");
+			String rg = rs.getString("RG");
+			String dir = rs.getString("DIR");
+			String suppress = rs.getString("SUPPRESS");
+			String cvf = rs.getObject("CVF") == null ? null : rs.getString("CVF");  //integer or string
+			
+			
+			String targetCui = lookedUp2 ? cui1 : cui2;
+			String targetAui = lookedUp2 ? aui1 : aui2;
+			
+			String sourceCui = lookedUp2 ? cui2 : cui1;
+			String sourceAui = lookedUp2 ? aui2 : aui1;
+			
+			if (!lookedUp2)
+			{
+				rel = reverseRel(rel);
+				rela = reverseRel(rela);
+			}
+			
+			if (isRelPrimary(rel, rela))
+			{
+				//This can happen when the reverse of the rel equals the rel... sib/sib
+				if (relCheckIsRelLoaded(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI")))
+				{
+					continue;
+				}
+				UUID targetConcept = ConverterUUID.createNamespaceUUIDFromString((targetAui == null ? "CUI" + targetCui : "AUI" + targetAui), true);
+				TkRelationship r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
+						targetConcept, ptRelationships_.getProperty(rel).getUUID(), null, null, null);
+				
+				eConcepts_.addStringAnnotation(r, stype1, ptAttributes_.getProperty("STYPE1").getUUID(), false);
+				eConcepts_.addStringAnnotation(r, stype2, ptAttributes_.getProperty("STYPE2").getUUID(), false);
+				if (rela != null)
+				{
+					eConcepts_.addUuidAnnotation(r, ptRelationshipQualifiers_.getProperty(rela).getUUID(), ptAttributes_.getProperty("RELA Label").getUUID());
+				}
+				if (rui != null)
+				{
+					eConcepts_.addAdditionalIds(r, rui, ptIds_.getProperty("RUI").getUUID());
+					satRelStatement_.clearParameters();
+					satRelStatement_.setString(1, rui);
+					ResultSet nestedRels = satRelStatement_.executeQuery();
+					processSAT(r, nestedRels);
+				}
+				if (!isRxNorm && srui != null)
+				{
+					eConcepts_.addStringAnnotation(r, srui, ptAttributes_.getProperty("SRUI").getUUID(), false);
+				}
+				eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptAttributes_.getProperty("SAB").getUUID());
+				if (!isRxNorm && sl != null && !sl.equals(sab))  //I don't  think this ever actually happens
+				{
+					eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptAttributes_.getProperty("SL").getUUID());
+				}
+				if (rg != null)
+				{
+					eConcepts_.addStringAnnotation(r, rg, ptAttributes_.getProperty("RG").getUUID(), false);
+				}
+				if (dir != null)
+				{
+					eConcepts_.addStringAnnotation(r, dir, ptAttributes_.getProperty("DIR").getUUID(), false);
+				}
+				if (suppress != null)
+				{
+					eConcepts_.addUuidAnnotation(r, ptSuppress_.getProperty(suppress).getUUID(), ptAttributes_.getProperty("SUPPRESS").getUUID());
+				}
+				if (cvf != null)
+				{
+					if (isRxNorm)
+					{
+						
+					
+						if (cvf.equals("4096"))
+						{
+							//TODO
+							//eConcepts_.addRefsetMember(cpcRefsetConcept_, r.getPrimordialComponentUuid(), null, true, null);
+						}
+						else
+						{
+							throw new RuntimeException("Unexpected value in RXNSAT cvf column '" + cvf + "'");
+						}
+					}
+					else
+					{
+						eConcepts_.addStringAnnotation(r, cvf, ptAttributes_.getProperty("CVF").getUUID(), false);
+					}
+				}
+				relCheckLoadedRel(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI"));
+			}
+			else
+			{
+				relCheckSkippedRel(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI"));
+			}
+		}
+		rs.close();
+	}
+	
+	private boolean isRelPrimary(String relName, String relaName)
+	{
+		if (relaName != null)
+		{
+			return nameToRel_.get(relaName).getFSNName().equals(relaName);
+		}
+		else
+		{
+			return nameToRel_.get(relName).getFSNName().equals(relName);
+		}
+	}
+	
+	private String reverseRel(String eitherRelType)
+	{
+		if (eitherRelType == null)
+		{
+			return null;
+		}
+		Relationship r = nameToRel_.get(eitherRelType);
+		if (r.getFSNName().equals(eitherRelType))
+		{
+			return r.getInverseFSNName();
+		}
+		else if (r.getInverseFSNName().equals(eitherRelType))
+		{
+			return r.getFSNName();
+		}
+		else
+		{
+			throw new RuntimeException("gak");
+		}
+		
+	}
+	
+	private UUID hashRelationship(String rel, String rela, String source, String target, String codeType)
+	{
+		return UUID.nameUUIDFromBytes(new String(rel + rela + source + target + codeType).getBytes());
+	}
+	
+	private void relCheckLoadedRel(String rel, String rela, String source, String target, String codeType)
+	{
+		UUID hash = hashRelationship(rel, rela, source, target, codeType);
+		loadedRels_.add(hash);
+		skippedRels_.remove(hash);
+	}
+	
+	private boolean relCheckIsRelLoaded(String rel, String rela, String source, String target, String codeType)
+	{
+		return loadedRels_.contains(hashRelationship(rel, rela, source, target, codeType));
+	}
+
+	/**
+	 * Call this when a rel wasn't added because the rel was listed with the inverse name, rather than the primary name. 
+	 */
+	private void relCheckSkippedRel(String rel, String rela, String source, String target, String codeType)
+	{
+		//Get the primary rel name, add it to the skip list
+		String primary = nameToRel_.get(rel).getFSNName();
+		String primaryExtended = null;
+		if (rela != null)
+		{
+			primaryExtended = nameToRel_.get(rela).getFSNName();
+		}
+		
+		//also reverse the cui2 / cui1
+		skippedRels_.add(hashRelationship(primary, primaryExtended, target, source, codeType));
+	}
+	
+	private void checkRelationships()
+	{
+		//if the inverse relationships all worked properly, skipped should be empty when loaded is subtracted from it.
+		for (UUID uuid : loadedRels_)
+		{
+			skippedRels_.remove(uuid);
+		}
+		
+		if (skippedRels_.size() > 0)
+		{
+			ConsoleUtil.printErrorln("Relationship design error - " +  skippedRels_.size() + " were skipped that should have been loaded");
+		}
+		else
+		{
+			ConsoleUtil.println("Yea! - no missing relationships!");
+		}
 	}
 }
