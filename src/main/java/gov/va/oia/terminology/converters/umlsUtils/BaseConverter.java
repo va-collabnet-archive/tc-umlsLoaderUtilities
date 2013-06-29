@@ -940,8 +940,11 @@ public abstract class BaseConverter implements Mojo
 				TkRelationship r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
 						targetConcept, relType, null, null, null);
 				
-				eConcepts_.addStringAnnotation(r, stype1, ptUMLSAttributes_.getProperty("STYPE1").getUUID(), false);
-				eConcepts_.addStringAnnotation(r, stype2, ptUMLSAttributes_.getProperty("STYPE2").getUUID(), false);
+				if (!isRxNorm)  //dropped for space concerns
+				{
+					eConcepts_.addStringAnnotation(r, stype1, ptUMLSAttributes_.getProperty("STYPE1").getUUID(), false);
+					eConcepts_.addStringAnnotation(r, stype2, ptUMLSAttributes_.getProperty("STYPE2").getUUID(), false);
+				}
 				if (rela != null)  //we already used rela - annotate with rel.
 				{
 					eConcepts_.addUuidAnnotation(r, ptRelationshipGeneric_.get(sab).getProperty(rel).getUUID(), ptUMLSAttributes_.getProperty("Generic rel type").getUUID());
@@ -958,7 +961,12 @@ public abstract class BaseConverter implements Mojo
 				{
 					eConcepts_.addStringAnnotation(r, srui, ptUMLSAttributes_.getProperty("SRUI").getUUID(), false);
 				}
-				eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptUMLSAttributes_.getProperty("SAB").getUUID());
+				
+				if (!isRxNorm)
+				{
+					//always rxnorm for rxnorm, don't bother loading.
+					eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptUMLSAttributes_.getProperty("SAB").getUUID());
+				}
 				if (!isRxNorm && sl != null && !sl.equals(sab))  //I don't  think this ever actually happens
 				{
 					eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptUMLSAttributes_.getProperty("SL").getUUID());
