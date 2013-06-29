@@ -6,14 +6,15 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 
 public class Relationship
 {
 	private String name1;
-	private String niceName1;
+	private String description1;
 	private String name2;
-	private String niceName2;
+	private String description2;
 	
 	private String name1SnomedCode;
 	private String name2SnomedCode;
@@ -24,37 +25,57 @@ public class Relationship
 	
 	private Boolean swap; 
 	
+	private static HashMap<String, String> preferredNameMap = new HashMap<>();
+	static
+	{
+		//I didn't like the names the provide in the UMLS - so I put those in as descriptions, and use these as the preferred terms.
+		preferredNameMap.put("PAR", "has parent");
+		preferredNameMap.put("CHD", "has child");
+		preferredNameMap.put("SY", "synonym");
+		preferredNameMap.put("SIB", "sibling");
+		preferredNameMap.put("DEL", "deleted");
+		preferredNameMap.put("RB", "broader");
+		preferredNameMap.put("RN", "narrower");
+		preferredNameMap.put("AQ", "allowed qualifier");
+		preferredNameMap.put("RO", "other");
+		preferredNameMap.put("RQ", "related, possibly synonymous");
+		preferredNameMap.put("XR", "not related");
+		preferredNameMap.put("RL", "alike");
+		preferredNameMap.put("RU", "related");
+		preferredNameMap.put("QB", "qualified by");
+	}
+	
 	public Relationship(boolean isRela)
 	{
 		this.isRela = isRela;
 	}
 		
-	public void addNiceName(String name, String niceName)
+	public void addDescription(String name, String niceName)
 	{
 		if (name.equals(name1))
 		{
-			if (niceName1 != null)
+			if (description1 != null)
 			{
 				throw new RuntimeException("Oops");
 			}
-			niceName1 = niceName;
+			description1 = niceName;
 		}
 		else if (name.equals(name2))
 		{
-			if (niceName2 != null)
+			if (description2 != null)
 			{
 				throw new RuntimeException("Oops");
 			}
-			niceName2 = niceName;
+			description2 = niceName;
 		}
 		else if (name1 == null && name2 == null)
 		{
-			if (niceName1 != null)
+			if (description1 != null)
 			{
 				throw new RuntimeException("Oops");
 			}
 			name1 = name;
-			niceName1 = niceName;
+			description1 = niceName;
 		}
 		else
 		{
@@ -162,9 +183,14 @@ public class Relationship
 		return swap ? name2 : name1;
 	}
 	
-	public String getNiceName()
+	public String getPreferredName()
 	{
-		return swap ? niceName2 : niceName1;
+		return preferredNameMap.get(getFSNName());
+	}
+	
+	public String getDescription()
+	{
+		return swap ? description2 : description1;
 	}
 	
 	public String getInverseFSNName()
@@ -172,9 +198,14 @@ public class Relationship
 		return swap ? name1 : name2;
 	}
 	
-	public String getInverseNiceName()
+	public String getInversePreferredName()
 	{
-		return swap ? niceName1 : niceName2;
+		return getInverseFSNName() == null ? null : preferredNameMap.get(getInverseFSNName());
+	}
+	
+	public String getInverseDescription()
+	{
+		return swap ? description1 : description2;
 	}
 	
 	public String getRelSnomedCode()

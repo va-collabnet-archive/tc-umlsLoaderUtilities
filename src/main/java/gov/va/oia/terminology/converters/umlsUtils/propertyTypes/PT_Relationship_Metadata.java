@@ -11,8 +11,9 @@ public class PT_Relationship_Metadata extends PropertyType
 	public PT_Relationship_Metadata()
 	{
 		super("Relationship Metadata");
-		addProperty("Inverse Name");
 		addProperty("Inverse FSN");
+		addProperty("Inverse Preferred Name");
+		addProperty("Inverse Description");
 		addProperty("General Rel Type");
 		addProperty("Inverse General Rel Type");
 		addProperty("Snomed Code");

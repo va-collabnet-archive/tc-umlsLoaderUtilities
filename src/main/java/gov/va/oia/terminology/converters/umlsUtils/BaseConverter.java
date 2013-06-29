@@ -718,7 +718,7 @@ public abstract class BaseConverter implements Mojo
 				
 				if (type.equals("expanded_form"))
 				{
-					rel.addNiceName(value, expl);
+					rel.addDescription(value, expl);
 				}
 				else if (type.equals("rela_inverse") || type.equals("rel_inverse"))
 				{
@@ -795,11 +795,11 @@ public abstract class BaseConverter implements Mojo
 			Property p;
 			if (r.getIsRela())
 			{
-				p = relationshipSpecificType_.addProperty(r.getFSNName(), r.getNiceName(), null);
+				p = relationshipSpecificType_.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
 			}
 			else
 			{
-				p = relationshipGeneric_.addProperty(r.getFSNName(), r.getNiceName(), null);
+				p = relationshipGeneric_.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
 			}
 			
 			p.registerConceptCreationListener(new ConceptCreationNotificationListener()
@@ -813,10 +813,16 @@ public abstract class BaseConverter implements Mojo
 								relationshipMetadata_.getProperty("Inverse FSN").getUUID(), false);
 					}
 					
-					if (r.getInverseNiceName() != null)
+					if (r.getPreferredName() != null)
 					{
-						eConcepts_.addDescription(concept, r.getInverseNiceName(), DescriptionType.SYNONYM, true, null, 
-								relationshipMetadata_.getProperty("Inverse Name").getUUID(), false);
+						eConcepts_.addDescription(concept, r.getInversePreferredName(), DescriptionType.SYNONYM, true, null, 
+								relationshipMetadata_.getProperty("Inverse Preferred Name").getUUID(), false);
+					}
+					
+					if (r.getInverseDescription() != null)
+					{
+						eConcepts_.addDescription(concept, r.getInverseDescription(), DescriptionType.DEFINITION, true, null, 
+								relationshipMetadata_.getProperty("Inverse Description").getUUID(), false);
 					}
 					
 					if (r.getRelType() != null)
