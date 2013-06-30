@@ -550,7 +550,7 @@ public abstract class BaseConverter implements Mojo
 				}
 				if (isRxNorm)
 				{
-					attributes.addProperty("UMLSAUI");  //This property should be in RXNDOC, but it is currently missing - bug in the data  //TODO remove in future release
+					attributes.addProperty("UMLSAUI");  //TODO bug in RxNorm - This property should be in RXNDOC, but it is currently missing - bug in the data  
 				}
 				rs.close();
 				s.close();
