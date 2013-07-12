@@ -72,6 +72,9 @@ public abstract class BaseConverter implements Mojo
 	protected HashSet<String> sabsInDB_ = new HashSet<>();
 	private boolean isRxNorm;
 	
+	private HashSet<String> rootConcepts_ = new HashSet<>();
+	protected UUID umlsRootConcept_ = null;
+	
 	protected UUID metaDataRoot_;
 	
 	PreparedStatement satRelStatement_;
@@ -477,6 +480,7 @@ public abstract class BaseConverter implements Mojo
 		}
 		
 		loadCustomMetaData();
+		findRootConcepts();
 	}
 	
 	private void loadTerminologySpecificMetadata() throws Exception
@@ -646,6 +650,34 @@ public abstract class BaseConverter implements Mojo
 		ConverterUUID.configureNamespace(mainNamespace);
 	}
 	
+	private void findRootConcepts() throws IOException, SQLException
+	{
+		if (isRxNorm)
+		{
+			return;
+		}
+		Statement statement = db_.getConnection().createStatement();
+		ResultSet rs = statement.executeQuery("select * from MRHIER where PAUI is null");
+		while (rs.next())
+		{
+			if (umlsRootConcept_ == null)
+			{
+				//Create the UMLS hierarchy root concept
+				EConcept concept = eConcepts_.createConcept("UMLS Root Concepts");
+				concept.writeExternal(dos_);
+				umlsRootConcept_ = concept.getPrimordialUuid();
+				ConsoleUtil.println("Root concept FSN is 'UMLS Root Concepts' and the UUID is " + umlsRootConcept_);
+			}
+
+			rootConcepts_.add(rs.getString("CUI") + ":" + rs.getString("AUI"));
+		}
+	}
+	
+	protected boolean isRootConcept(String cui, String aui)
+	{
+		return rootConcepts_.contains(cui + ":" + aui);
+	}
+	
 	/**
 	 * Implementer needs to add an entry to ptDescriptions_ with the data provided...
 	 */
@@ -799,7 +831,15 @@ public abstract class BaseConverter implements Mojo
 			}
 			else
 			{
-				p = relationshipGeneric_.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+				if (r.getFSNName().equals("PAR"))
+				{
+					p = new Property(r.getFSNName(), r.getPreferredName(), r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
+					relationshipGeneric_.addProperty(p);
+				}
+				else
+				{
+					p = relationshipGeneric_.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+				}
 			}
 			
 			p.registerConceptCreationListener(new ConceptCreationNotificationListener()
@@ -926,19 +966,30 @@ public abstract class BaseConverter implements Mojo
 					continue;
 				}
 				
-				UUID relType = null;
+				Property relType = null;
 				if (rela == null)
 				{
-					relType = ptRelationshipGeneric_.get(sab).getProperty(rel).getUUID();
+					relType = ptRelationshipGeneric_.get(sab).getProperty(rel);
 				}
 				else
 				{
-					relType = ptRelationshipSpecificTypes_.get(sab).getProperty(rela).getUUID();
+					relType = ptRelationshipSpecificTypes_.get(sab).getProperty(rela);
 				}
 				
 				UUID targetConcept = ConverterUUID.createNamespaceUUIDFromString((targetAui == null ? "CUI" + targetCui : "AUI" + targetAui), true);
-				TkRelationship r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
-						targetConcept, relType, null, null, null);
+				
+				TkRelationship r;
+				
+				if (relType.getWBTypeUUID() == null)
+				{
+					r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
+						targetConcept, relType.getUUID(), null, null, null);
+				}
+				else  //need to swap out to the wb rel type (usually, isa)
+				{
+					r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
+							targetConcept, relType.getWBTypeUUID(), relType.getUUID(), relType.getPropertyType().getPropertyTypeReferenceSetUUID(), null);
+				}
 				
 				if (!isRxNorm)  //dropped for space concerns
 				{
@@ -983,25 +1034,8 @@ public abstract class BaseConverter implements Mojo
 				{
 					eConcepts_.addUuidAnnotation(r, ptSuppress_.getProperty(suppress).getUUID(), ptUMLSAttributes_.getProperty("SUPPRESS").getUUID());
 				}
-				if (cvf != null)
-				{
-					if (isRxNorm)
-					{
-						if (cvf.equals("4096"))
-						{
-							//TODO - ugly, should figure out a callback mechanism.
-							eConcepts_.addRefsetMember(ptRefsets_.get("RXNORM").getConcept("Current Prescribable Content"), r.getPrimordialComponentUuid(), null, true, null);
-						}
-						else
-						{
-							throw new RuntimeException("Unexpected value in RXNSAT cvf column '" + cvf + "'");
-						}
-					}
-					else
-					{
-						eConcepts_.addStringAnnotation(r, cvf, ptUMLSAttributes_.getProperty("CVF").getUUID(), false);
-					}
-				}
+				processRelCVFAttributes(r, cvf);
+
 				relCheckLoadedRel(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI"));
 			}
 			else
@@ -1010,6 +1044,15 @@ public abstract class BaseConverter implements Mojo
 			}
 		}
 		rs.close();
+	}
+	
+	//This is overridden by RXNorm, which handles it differently
+	protected void processRelCVFAttributes(TkRelationship r, String cvf)
+	{
+		if (cvf != null)
+		{
+			eConcepts_.addStringAnnotation(r, cvf, ptUMLSAttributes_.getProperty("CVF").getUUID(), false);
+		}
 	}
 	
 	private boolean isRelPrimary(String relName, String relaName)

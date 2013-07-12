@@ -28,9 +28,9 @@ public class Relationship
 	private static HashMap<String, String> preferredNameMap = new HashMap<>();
 	static
 	{
-		//I didn't like the names the provide in the UMLS - so I put those in as descriptions, and use these as the preferred terms.
-		preferredNameMap.put("PAR", "has parent");
-		preferredNameMap.put("CHD", "has child");
+		//I didn't like the names they provide in the UMLS - so I put those in as descriptions, and use these as the preferred terms.
+		preferredNameMap.put("PAR", "is parent");  //This is a confusing mess in UMLS - they define it as "has parent" but they really mean "is the parent of"
+		preferredNameMap.put("CHD", "is child");
 		preferredNameMap.put("SY", "synonym");
 		preferredNameMap.put("SIB", "sibling");
 		preferredNameMap.put("DEL", "deleted");
@@ -258,7 +258,7 @@ public class Relationship
 		{
 			swap = name2.equals("AQ");
 		}
-		else if (name1.equals("CHD") || name2.equals("CHD"))  //parent as primary
+		else if (name1.equals("CHD") || name2.equals("CHD"))  //is child as primary
 		{
 			swap = name2.equals("CHD");
 		}
