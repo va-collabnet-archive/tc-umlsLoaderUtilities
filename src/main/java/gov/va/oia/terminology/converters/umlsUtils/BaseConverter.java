@@ -223,7 +223,7 @@ public abstract class BaseConverter implements Mojo
 		
 		ptSuppress_=  xDocLoaderHelper("SUPPRESS", "Suppress", false);
 		
-		//Not yet loading co-occurance data yet, so don't need these yet.
+		//Not yet loading co-occurrence data yet, so don't need these yet.
 		//xDocLoaderHelper("COA", "Attributes of co-occurrence", false);
 		//xDocLoaderHelper("COT", "Type of co-occurrence", true);  
 		
@@ -479,6 +479,9 @@ public abstract class BaseConverter implements Mojo
 		findRootConcepts();
 	}
 	
+	/*
+	 * Note - may return null, if there were no instances of the requested data
+	 */
 	protected PropertyType xDocLoaderHelper(String dockey, String niceName, boolean loadAsDefinition) throws Exception
 	{
 		ConsoleUtil.println("Creating '" + niceName + "' types");
@@ -507,6 +510,12 @@ public abstract class BaseConverter implements Mojo
 			}
 			rs.close();
 			s.close();
+		}
+		if (pt.getProperties().size() == 0)
+		{
+			//This can happen, depending on what is included during the metamorphosys run
+			ConsoleUtil.println("No entries found for '" + niceName + "' - skipping");
+			return null;
 		}
 		eConcepts_.loadMetaDataItems(pt, metaDataRoot_, dos_);
 		return pt;
