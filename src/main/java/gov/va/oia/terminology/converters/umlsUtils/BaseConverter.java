@@ -226,7 +226,7 @@ public abstract class BaseConverter implements Mojo
 		xDocLoaderHelper("COT", "Type of co-occurrence", true);  //Not loading co-occurence data yet, so no ref
 		final PropertyType contextTypes = xDocLoaderHelper("CXTY", "Context Type", true);
 		xDocLoaderHelper("FROMTYPE", "Mapping From Type", false);  //not yet loading mappings - so no ref
-		xDocLoaderHelper("TOTYPE", "Mapping From Type", false);  //not yet loading mappings - so no ref
+		xDocLoaderHelper("TOTYPE", "Mapping To Type", false);  //not yet loading mappings - so no ref
 		//MAPATN - not yet used in UMLS
 		
 		
