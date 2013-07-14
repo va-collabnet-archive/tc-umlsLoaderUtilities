@@ -221,15 +221,18 @@ public abstract class BaseConverter implements Mojo
 		eConcepts_.loadMetaDataItems(ptSTypes_, metaDataRoot_, dos_);
 		
 		
-		ptSuppress_=  xDocLoaderHelper("SUPPRESS", "Suppress", false); 
-		xDocLoaderHelper("COA", "Attributes of co-occurrence", false);  //Not loading co-occurence data yet, so no ref
-		xDocLoaderHelper("COT", "Type of co-occurrence", true);  //Not loading co-occurence data yet, so no ref
+		ptSuppress_=  xDocLoaderHelper("SUPPRESS", "Suppress", false);
+		
+		//Not yet loading co-occurance data yet, so don't need these yet.
+		//xDocLoaderHelper("COA", "Attributes of co-occurrence", false);
+		//xDocLoaderHelper("COT", "Type of co-occurrence", true);  
+		
 		final PropertyType contextTypes = xDocLoaderHelper("CXTY", "Context Type", true);
-		xDocLoaderHelper("FROMTYPE", "Mapping From Type", false);  //not yet loading mappings - so no ref
-		xDocLoaderHelper("TOTYPE", "Mapping To Type", false);  //not yet loading mappings - so no ref
+		
+		//not yet loading mappings - so don't need this yet
+		//xDocLoaderHelper("FROMTYPE", "Mapping From Type", false);  
+		//xDocLoaderHelper("TOTYPE", "Mapping To Type", false);  
 		//MAPATN - not yet used in UMLS
-		
-		
 		
 		// Handle the languages
 		{
@@ -392,6 +395,10 @@ public abstract class BaseConverter implements Mojo
 									{
 										String columnName = metadataProperty.getSourcePropertyNameFSN();
 										String columnValue = rs.getString(columnName);
+										if (columnValue == null)
+										{
+											continue;
+										}
 										if (columnName.equals("SRL"))
 										{
 											eConcepts_.addUuidAnnotation(concept, ptSourceRestrictionLevels_.getProperty(columnValue).getUUID(),
