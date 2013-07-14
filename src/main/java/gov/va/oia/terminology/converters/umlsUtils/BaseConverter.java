@@ -926,9 +926,9 @@ public abstract class BaseConverter implements Mojo
 		}
 		
 		eConcepts_.loadMetaDataItems(relationshipGeneric_, terminologyMetadataRoot, dos_);
-		ptRelationshipGeneric_.put(sab,  relationshipGeneric_);
+		ptRelationshipGeneric_.put(sab, relationshipGeneric_);
 		eConcepts_.loadMetaDataItems(relationshipSpecificType_, terminologyMetadataRoot, dos_);
-		ptRelationshipSpecificTypes_.put(sab,  relationshipSpecificType_);
+		ptRelationshipSpecificTypes_.put(sab, relationshipSpecificType_);
 	}
 	
 	protected void processSemanticTypes(EConcept concept, ResultSet rs) throws SQLException
