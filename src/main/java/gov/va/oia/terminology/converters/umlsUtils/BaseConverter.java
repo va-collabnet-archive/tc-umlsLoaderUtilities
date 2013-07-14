@@ -188,7 +188,8 @@ public abstract class BaseConverter implements Mojo
 		final PropertyType sourceMetadata = new PT_SAB_Metadata();
 		relationshipMetadata_ = new PT_Relationship_Metadata();
 
-		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, ptContentVersion_, sourceMetadata, relationshipMetadata_, ptUMLSAttributes_), metaDataRoot_, dos_);
+		//don't load ptContentVersion_ yet - custom code might add to it
+		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, sourceMetadata, relationshipMetadata_, ptUMLSAttributes_), metaDataRoot_, dos_);
 		
 		loadTerminologySpecificMetadata();
 		
@@ -219,35 +220,16 @@ public abstract class BaseConverter implements Mojo
 		}
 		eConcepts_.loadMetaDataItems(ptSTypes_, metaDataRoot_, dos_);
 		
-		//SUPPRESS values
-		ConsoleUtil.println("Creating Suppress types");
-		ptSuppress_= new PropertyType("Suppress") {};
-		{
-			Statement s = db_.getConnection().createStatement();
-			ResultSet rs = s.executeQuery("SELECT VALUE, TYPE, EXPL FROM " + tablePrefix_ + "DOC where DOCKEY='SUPPRESS'");
-			while (rs.next())
-			{
-				String value = rs.getString("VALUE");
-				String type = rs.getString("TYPE");
-				String name = rs.getString("EXPL");
-				
-				if (value == null)
-				{
-					//there is a null entry, don't care about it.
-					continue;
-				}
-
-				if (!type.equals("expanded_form"))
-				{
-					throw new RuntimeException("Unexpected type in the attribute data within DOC: '" + type + "'");
-				}				
-				
-				ptSuppress_.addProperty(value, name, null);
-			}
-			rs.close();
-			s.close();
-		}
-		eConcepts_.loadMetaDataItems(ptSuppress_, metaDataRoot_, dos_);
+		
+		ptSuppress_=  xDocLoaderHelper("SUPPRESS", "Suppress", false); 
+		xDocLoaderHelper("COA", "Attributes of co-occurrence", false);  //Not loading co-occurence data yet, so no ref
+		xDocLoaderHelper("COT", "Type of co-occurrence", true);  //Not loading co-occurence data yet, so no ref
+		final PropertyType contextTypes = xDocLoaderHelper("CXTY", "Context Type", true);
+		xDocLoaderHelper("FROMTYPE", "Mapping From Type", false);  //not yet loading mappings - so no ref
+		xDocLoaderHelper("TOTYPE", "Mapping From Type", false);  //not yet loading mappings - so no ref
+		//MAPATN - not yet used in UMLS
+		
+		
 		
 		// Handle the languages
 		{
@@ -415,6 +397,11 @@ public abstract class BaseConverter implements Mojo
 											eConcepts_.addUuidAnnotation(concept, ptSourceRestrictionLevels_.getProperty(columnValue).getUUID(),
 													metadataProperty.getUUID());
 										}
+										else if (columnName.equals("CXTY"))
+										{
+											eConcepts_.addUuidAnnotation(concept, contextTypes.getProperty(columnValue).getUUID(),
+													metadataProperty.getUUID());
+										}
 										else
 										{
 											eConcepts_.addStringAnnotation(concept, columnValue, metadataProperty.getUUID(), false);
@@ -480,7 +467,42 @@ public abstract class BaseConverter implements Mojo
 		}
 		
 		loadCustomMetaData();
+		eConcepts_.loadMetaDataItems(ptContentVersion_, metaDataRoot_, dos_);
+		
 		findRootConcepts();
+	}
+	
+	protected PropertyType xDocLoaderHelper(String dockey, String niceName, boolean loadAsDefinition) throws Exception
+	{
+		ConsoleUtil.println("Creating '" + niceName + "' types");
+		PropertyType pt = new PropertyType(niceName) {};
+		{
+			Statement s = db_.getConnection().createStatement();
+			ResultSet rs = s.executeQuery("SELECT VALUE, TYPE, EXPL FROM " + tablePrefix_ + "DOC where DOCKEY='" + dockey + "'");
+			while (rs.next())
+			{
+				String value = rs.getString("VALUE");
+				String type = rs.getString("TYPE");
+				String name = rs.getString("EXPL");
+				
+				if (value == null)
+				{
+					//there is a null entry, don't care about it.
+					continue;
+				}
+
+				if (!type.equals("expanded_form"))
+				{
+					throw new RuntimeException("Unexpected type in the attribute data within DOC: '" + type + "'");
+				}				
+				
+				pt.addProperty(value, (loadAsDefinition ? null : name), (loadAsDefinition ? name : null));
+			}
+			rs.close();
+			s.close();
+		}
+		eConcepts_.loadMetaDataItems(pt, metaDataRoot_, dos_);
+		return pt;
 	}
 	
 	private void loadTerminologySpecificMetadata() throws Exception
@@ -831,7 +853,7 @@ public abstract class BaseConverter implements Mojo
 			}
 			else
 			{
-				if (r.getFSNName().equals("PAR"))
+				if (r.getFSNName().equals("CHD"))
 				{
 					p = new Property(r.getFSNName(), r.getPreferredName(), r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
 					relationshipGeneric_.addProperty(p);
@@ -909,8 +931,9 @@ public abstract class BaseConverter implements Mojo
 			TkRefexUuidMember annotation = eConcepts_.addUuidAnnotation(concept, semanticTypes_.get(rs.getString("TUI")), ptUMLSAttributes_.getProperty("STY").getUUID());
 			if (rs.getString("ATUI") != null)
 			{
-				eConcepts_.addStringAnnotation(annotation, rs.getString("ATUI"), ptUMLSAttributes_.getProperty("ATUI").getUUID(), false);
+				eConcepts_.addAdditionalIds(annotation, rs.getString("ATUI"), ptIds_.getProperty("ATUI").getUUID());
 			}
+
 			if (rs.getObject("CVF") != null)  //might be an int or a string
 			{
 				eConcepts_.addStringAnnotation(annotation, rs.getString("CVF"), ptUMLSAttributes_.getProperty("CVF").getUUID(), false);

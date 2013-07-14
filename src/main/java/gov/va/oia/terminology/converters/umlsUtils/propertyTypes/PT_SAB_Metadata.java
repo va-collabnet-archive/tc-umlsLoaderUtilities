@@ -3,7 +3,6 @@ package gov.va.oia.terminology.converters.umlsUtils.propertyTypes;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.PropertyType;
 
 /**
- * Properties from the DTS ndf load which are treated as alternate IDs within the workbench.
  * @author Daniel Armbrust
  */
 public class PT_SAB_Metadata extends PropertyType
