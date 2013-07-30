@@ -15,6 +15,7 @@ import gov.va.oia.terminology.converters.sharedUtils.stats.ConverterUUID;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Refsets;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Relationship_Metadata;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_SAB_Metadata;
+import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_UMLS_Relationships;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -37,6 +38,7 @@ import org.dwfa.cement.ArchitectonicAuxiliary;
 import org.dwfa.util.id.Type3UuidFactory;
 import org.ihtsdo.etypes.EConcept;
 import org.ihtsdo.tk.dto.concept.component.TkComponent;
+import org.ihtsdo.tk.dto.concept.component.refex.type_string.TkRefsetStrMember;
 import org.ihtsdo.tk.dto.concept.component.refex.type_uuid.TkRefexUuidMember;
 import org.ihtsdo.tk.dto.concept.component.relationship.TkRelationship;
 
@@ -45,7 +47,7 @@ public abstract class BaseConverter implements Mojo
 	//Used for UMLS metadata, and all of RxNorm
 	protected String namespaceSeed_;
 	
-	protected final String terminologyAUIRefsetPropertyName_ = "All AUI Concepts";
+	protected HashMap<String, String> terminologyCodeRefsetPropertyName_ = new HashMap<>();
 	protected PropertyType ptUMLSAttributes_;
 	protected HashMap<String, PropertyType> ptTermAttributes_ = new HashMap<>();
 	protected PropertyType ptIds_;
@@ -57,6 +59,7 @@ public abstract class BaseConverter implements Mojo
 	protected PropertyType ptLanguages_;
 	protected PropertyType ptSourceRestrictionLevels_;
 	protected PropertyType ptSABs_;
+	protected PT_UMLS_Relationships ptUMLSRelationships_;
 	protected HashMap<String, PropertyType> ptDescriptions_ = new HashMap<>();;
 	protected HashMap<String, PropertyType> ptRelationshipGeneric_ = new HashMap<>();;
 	protected HashMap<String, PropertyType> ptRelationshipSpecificTypes_ = new HashMap<>();;
@@ -187,9 +190,11 @@ public abstract class BaseConverter implements Mojo
 		ptContentVersion_ = new BPT_ContentVersion();
 		final PropertyType sourceMetadata = new PT_SAB_Metadata();
 		relationshipMetadata_ = new PT_Relationship_Metadata();
+		ptUMLSRelationships_ = new PT_UMLS_Relationships();
 
 		//don't load ptContentVersion_ yet - custom code might add to it
-		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, sourceMetadata, relationshipMetadata_, ptUMLSAttributes_), metaDataRoot_, dos_);
+		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, sourceMetadata, relationshipMetadata_, ptUMLSAttributes_, ptUMLSRelationships_),
+				metaDataRoot_, dos_);
 		
 		loadTerminologySpecificMetadata();
 		
@@ -677,7 +682,8 @@ public abstract class BaseConverter implements Mojo
 			
 			//Make a refset
 			BPT_Refsets refset = new BPT_Refsets(terminologyName);
-			refset.addProperty(terminologyAUIRefsetPropertyName_);
+			terminologyCodeRefsetPropertyName_.put(sab, "All " + terminologyName + " Concepts");
+			refset.addProperty(terminologyCodeRefsetPropertyName_.get(sab));
 			addCustomRefsets(refset);
 			ptRefsets_.put(sab, refset);
 			eConcepts_.loadMetaDataItems(refset, termSpecificMetadataRoot, dos_);
@@ -726,7 +732,7 @@ public abstract class BaseConverter implements Mojo
 	 */
 	protected abstract void allDescriptionsCreated(String sab) throws Exception;
 	
-	protected abstract void processSAT(TkComponent<?> itemToAnnotate, ResultSet rs) throws SQLException;
+	protected abstract void processSAT(TkComponent<?> itemToAnnotate, ResultSet rs, String itemCode, String itemSab) throws SQLException;
 	
 	private void loadRelationshipMetadata(String terminologyName, String sab, UUID terminologyMetadataRoot) throws Exception
 	{
@@ -958,13 +964,45 @@ public abstract class BaseConverter implements Mojo
 		rs.close();
 	}
 	
+	/**
+	 * Add the attribute value(s) of the given type, with nested attributes linking to the AUI(s) that they came from.  
+	 */
+	protected void loadStringAttributes(EConcept concept, String attributeName, String auiName, HashMap<String, HashSet<String>> values)
+	{
+		for (Entry<String, HashSet<String>> valueAui : values.entrySet())
+		{
+			String value = valueAui.getKey();
+			TkRefsetStrMember attribute = eConcepts_.addStringAnnotation(concept, value, ptUMLSAttributes_.getProperty(attributeName).getUUID(), false);
+			for (String aui : valueAui.getValue())
+			{
+				eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+			}
+		}
+	}
+	
+	/**
+	 * Add the attribute value(s) of the given type, with nested attributes linking to the AUI(s) that they came from.  
+	 */
+	protected void loadUUIDAttributes(EConcept concept, String attributeName, String auiName, HashMap<String, HashSet<String>> values)
+	{
+		for (Entry<String, HashSet<String>> valueAui : values.entrySet())
+		{
+			String value = valueAui.getKey();
+			TkRefexUuidMember attribute = eConcepts_.addUuidAnnotation(concept, ptSuppress_.getProperty(value).getUUID(), 
+					ptUMLSAttributes_.getProperty("SUPPRESS").getUUID());
+			for (String aui : valueAui.getValue())
+			{
+				eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+			}
+		}
+	}
 	
 	/**
 	 * @param isCUI - true for CUI, false for AUI
 	 * @throws SQLException
 	 */
 	protected void addRelationships(EConcept concept, ResultSet rs, boolean lookedUp2) throws SQLException
-	{	
+	{
 		while (rs.next())
 		{
 			String cui1 = rs.getString(isRxNorm ? "RXCUI1" : "CUI1");
@@ -1045,7 +1083,7 @@ public abstract class BaseConverter implements Mojo
 					satRelStatement_.clearParameters();
 					satRelStatement_.setString(1, rui);
 					ResultSet nestedRels = satRelStatement_.executeQuery();
-					processSAT(r, nestedRels);
+					processSAT(r, nestedRels, null, sab);
 				}
 				if (!isRxNorm && srui != null)
 				{
@@ -1072,6 +1110,16 @@ public abstract class BaseConverter implements Mojo
 				if (suppress != null)
 				{
 					eConcepts_.addUuidAnnotation(r, ptSuppress_.getProperty(suppress).getUUID(), ptUMLSAttributes_.getProperty("SUPPRESS").getUUID());
+				}
+				if (sourceAui != null)
+				{
+					//If sourceAUI was defined, annotate with the AUI that this rel came from, since it is being placed on a concept that combines multiple AUIs
+					eConcepts_.addStringAnnotation(r, sourceAui, relationshipMetadata_.getProperty("Source AUI").getUUID(), false);
+				}
+				if (targetAui != null)
+				{
+					//If sourceAUI was defined, annotate with the AUI that this rel came from, since it is being placed on a concept that combines multiple AUIs
+					eConcepts_.addStringAnnotation(r, targetAui, relationshipMetadata_.getProperty("Target AUI").getUUID(), false);
 				}
 				processRelCVFAttributes(r, cvf);
 

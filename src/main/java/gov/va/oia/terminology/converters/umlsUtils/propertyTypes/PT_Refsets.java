@@ -10,7 +10,7 @@ public class PT_Refsets extends BPT_Refsets
 {
 	public Property ALL;
 	public Property CUI_CONCEPTS;
-	public Property AUI_CONCEPTS;
+	public Property TERM_CONCEPTS;
 	
 	public PT_Refsets(String terminologyName)
 	{
@@ -18,6 +18,6 @@ public class PT_Refsets extends BPT_Refsets
 		//owner autofiled by addProperty call
 		ALL = addProperty("All " + terminologyName + " Concepts");
 		CUI_CONCEPTS = addProperty("All " + terminologyName + " CUI Concepts");
-		AUI_CONCEPTS = addProperty("All " + terminologyName + " AUI Concepts");
+		TERM_CONCEPTS = addProperty("All " + terminologyName + " Code Concepts");
 	}
 }
