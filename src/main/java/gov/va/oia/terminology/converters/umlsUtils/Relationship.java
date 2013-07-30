@@ -274,11 +274,30 @@ public class Relationship
 					//ignore these - they sometimes occur in tandem with a directional one below
 					continue;
 				}
+				
+				if (name1.equals("mapped_from"))
+				{
+					//This one is all over the board in UMLS, sometimes tied to RB, sometimes RN, or a whole bunch of other types.
+					//Just let the code below handle it.
+					break;
+				}
+				
+				String rel = rs.getString("REL");
+				
 				if (swap != null)
 				{
-					throw new RuntimeException("too many results on rel " + name1);
+					//this is a bug? in umls - has_part and inverse_isa appears with both PAR and RB rels - but we set the swap the same for each, so ignore the second one.
+					// inverse_isa also uses RQ, but just ignore that too.
+					if ((name1.equals("inverse_isa") || name1.equals("has_part")) && (rel.equals("PAR") || rel.equals("RB") || rel.equals("RQ")))
+					{
+						continue;
+					}
+					else
+					{
+						throw new RuntimeException("too many results on rela " + name1);
+					}
 				}
-				String rel = rs.getString("REL");
+				
 				if (new HashSet<String>(Arrays.asList(new String[] {"RB", "RN", "QB", "AQ", "PAR", "CHD"})).contains(rel))
 				{
 					if (rel.equals("RN") || rel.equals("AQ") || rel.equals("CHD"))
