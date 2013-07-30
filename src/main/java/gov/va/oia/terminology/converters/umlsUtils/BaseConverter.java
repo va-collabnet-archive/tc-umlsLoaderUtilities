@@ -965,36 +965,75 @@ public abstract class BaseConverter implements Mojo
 	}
 	
 	/**
-	 * Add the attribute value(s) of the given type, with nested attributes linking to the AUI(s) that they came from.  
+	 * Add the attribute value(s) for each given type, with nested attributes linking to the AUI(s) that they came from.  
 	 */
-	protected void loadStringAttributes(EConcept concept, String attributeName, String auiName, HashMap<String, HashSet<String>> values)
+	protected void loadGroupStringAttributes(EConcept concept, String auiName, HashMap<UUID, HashMap<String, HashSet<String>>> values)
 	{
-		for (Entry<String, HashSet<String>> valueAui : values.entrySet())
+		for (Entry<UUID, HashMap<String, HashSet<String>>> dataType : values.entrySet())
 		{
-			String value = valueAui.getKey();
-			TkRefsetStrMember attribute = eConcepts_.addStringAnnotation(concept, value, ptUMLSAttributes_.getProperty(attributeName).getUUID(), false);
-			for (String aui : valueAui.getValue())
+			for (Entry<String, HashSet<String>> valueAui : dataType.getValue().entrySet())
 			{
-				eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+				String value = valueAui.getKey();
+				TkRefsetStrMember attribute = eConcepts_.addStringAnnotation(concept, value, dataType.getKey(), false);
+				for (String aui : valueAui.getValue())
+				{
+					eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+				}
 			}
 		}
 	}
 	
 	/**
-	 * Add the attribute value(s) of the given type, with nested attributes linking to the AUI(s) that they came from.  
+	 * Add the attribute value(s) for each given type, with nested attributes linking to the AUI(s) that they came from.  
 	 */
-	protected void loadUUIDAttributes(EConcept concept, String attributeName, String auiName, HashMap<String, HashSet<String>> values)
+	protected void loadGroupUUIDAttributes(EConcept concept, String auiName, HashMap<UUID, HashMap<UUID, HashSet<String>>> values)
 	{
-		for (Entry<String, HashSet<String>> valueAui : values.entrySet())
+		for (Entry<UUID, HashMap<UUID, HashSet<String>>> dataType : values.entrySet())
 		{
-			String value = valueAui.getKey();
-			TkRefexUuidMember attribute = eConcepts_.addUuidAnnotation(concept, ptSuppress_.getProperty(value).getUUID(), 
-					ptUMLSAttributes_.getProperty("SUPPRESS").getUUID());
-			for (String aui : valueAui.getValue())
+			for (Entry<UUID, HashSet<String>> valueAui : dataType.getValue().entrySet())
 			{
-				eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+				UUID value = valueAui.getKey();
+				TkRefexUuidMember attribute = eConcepts_.addUuidAnnotation(concept, value, dataType.getKey());
+				for (String aui : valueAui.getValue())
+				{
+					eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+				}
 			}
 		}
+	}
+	
+	protected void addAttributeToGroup(HashMap<UUID, HashMap<String, HashSet<String>>> group, UUID typeForColName, String value, String aui)
+	{
+		HashMap<String, HashSet<String>> colData = group.get(typeForColName);
+		if (colData == null)
+		{
+			colData = new HashMap<>();
+			group.put(typeForColName, colData);
+		}
+		HashSet<String> auis = colData.get(value);
+		if (auis == null)
+		{
+			auis = new HashSet<>();
+			colData.put(value, auis);
+		}
+		auis.add(aui);
+	}
+	
+	protected void addAttributeToGroup(HashMap<UUID, HashMap<UUID, HashSet<String>>> group, UUID typeForColName, UUID value, String aui)
+	{
+		HashMap<UUID, HashSet<String>> colData = group.get(typeForColName);
+		if (colData == null)
+		{
+			colData = new HashMap<>();
+			group.put(typeForColName, colData);
+		}
+		HashSet<String> auis = colData.get(value);
+		if (auis == null)
+		{
+			auis = new HashSet<>();
+			colData.put(value, auis);
+		}
+		auis.add(aui);
 	}
 	
 	/**
