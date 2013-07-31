@@ -51,7 +51,7 @@ public class RRFDatabaseHandle
 		}
 		else
 		{
-			connection_ = DriverManager.getConnection("jdbc:h2:" + dbFile.getAbsolutePath() +";LOG=0;CACHE_SIZE=512000;LOCK_MODE=0;");
+			connection_ = DriverManager.getConnection("jdbc:h2:" + dbFile.getAbsolutePath() +";LOG=0;CACHE_SIZE=1024000;LOCK_MODE=0;");
 		}
 		return createdNew;
 	}
