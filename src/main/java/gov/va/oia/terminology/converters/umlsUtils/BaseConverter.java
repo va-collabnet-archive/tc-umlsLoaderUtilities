@@ -103,6 +103,7 @@ public abstract class BaseConverter implements Mojo
 			sabQueryString_ += " (";
 			for (String sab : sabList)
 			{
+				validateSab(sab);
 				sabQueryString_ += "SAB='" + sab + "' or ";
 				sabsInDB_.add(sab);
 			}
@@ -158,6 +159,24 @@ public abstract class BaseConverter implements Mojo
 		eConcepts_.clearLoadStats();
 		satRelStatement_ = db_.getConnection().prepareStatement("select * from " + tablePrefix_ + "SAT where " + (isRxNorm ? "RXAUI" : "METAUI") 
 				+ "= ? and STYPE='RUI' " + (sabQueryString_.length() > 0 ? "and" + sabQueryString_ : ""));
+	}
+
+	private void validateSab(String sab) throws Exception
+	{
+		Statement s = db_.getConnection().createStatement();
+		ResultSet rs = s.executeQuery("Select SAB from " + tablePrefix_ + "CONSO where SAB = '" + sab + "' limit 1");
+		if (!rs.next())
+		{
+			rs.close();
+			//Check MRREL
+			rs = s.executeQuery("Select SAB from " + tablePrefix_ + "REL where SAB = '" + sab + "' limit 1");
+			if (!rs.next())
+			{
+				throw new Exception("Invalid sabFilter '" + sab + "'.  Perhaps you have mixed up VSABs and RSABs?");
+			}
+		}
+		rs.close();
+		s.close();
 	}
 	
 	protected void finish(File outputDirectory) throws IOException, SQLException
@@ -360,7 +379,7 @@ public abstract class BaseConverter implements Mojo
 		}
 
 		// And Source vocabularies
-		final PreparedStatement getSABMetadata = db_.getConnection().prepareStatement("Select * from " + tablePrefix_ + "SAB where RSAB = ? or VSAB = ?");
+		final PreparedStatement getSABMetadata = db_.getConnection().prepareStatement("Select * from " + tablePrefix_ + "SAB where (VSAB = ? or (RSAB = ? and CURVER='Y' ))");
 		{
 			ConsoleUtil.println("Creating Source Vocabulary types");
 			ptSABs_ = new PropertyType("Source Vocabularies"){};
@@ -385,7 +404,7 @@ public abstract class BaseConverter implements Mojo
 			for (String currentSab : sabList)
 			{
 				s = db_.getConnection().createStatement();
-				rs = s.executeQuery("SELECT SON from " + tablePrefix_ + "SAB WHERE (RSAB='" + currentSab + "' or VSAB='" + currentSab + "')");
+				rs = s.executeQuery("SELECT SON from " + tablePrefix_ + "SAB WHERE (VSAB='" + currentSab + "' or (RSAB='" + currentSab + "' and CURVER='Y'))");
 				if (rs.next())
 				{
 					String son = rs.getString("SON");
@@ -447,7 +466,7 @@ public abstract class BaseConverter implements Mojo
 				}
 				if (rs.next())
 				{
-					throw new RuntimeException("Too many SABs - perhaps you need to use versioned SABs.");
+					throw new RuntimeException("Too many SABs for '" + currentSab  + "' - perhaps you need to use versioned SABs.");
 				}
 				rs.close();
 				s.close();
@@ -852,8 +871,8 @@ public abstract class BaseConverter implements Mojo
 			throw new RuntimeException("oops");
 		}
 		
-		final PropertyType relationshipGeneric_ = new BPT_Relations("Relation Types Generic", terminologyName) {};  
-		final PropertyType relationshipSpecificType_ = new BPT_Relations(terminologyName) {}; //Relation Types - default metadata node
+		final PropertyType relationshipGeneric = new BPT_Relations("Relation Types Generic", terminologyName) {};  
+		final PropertyType relationshipSpecificType = new BPT_Relations(terminologyName) {}; //Relation Types - default metadata node
 		
 		s = db_.getConnection().createStatement();
 		rs = s.executeQuery("select distinct REL, RELA from " + tablePrefix_ + "REL where SAB='" + sab + "'");
@@ -881,18 +900,18 @@ public abstract class BaseConverter implements Mojo
 			Property p;
 			if (r.getIsRela())
 			{
-				p = relationshipSpecificType_.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+				p = relationshipSpecificType.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
 			}
 			else
 			{
 				if (r.getFSNName().equals("CHD"))
 				{
 					p = new Property(r.getFSNName(), r.getPreferredName(), r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
-					relationshipGeneric_.addProperty(p);
+					relationshipGeneric.addProperty(p);
 				}
 				else
 				{
-					p = relationshipGeneric_.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+					p = relationshipGeneric.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
 				}
 			}
 			
@@ -923,7 +942,7 @@ public abstract class BaseConverter implements Mojo
 					{
 						Relationship generalRel = nameToRel_.get(r.getRelType());
 						
-						eConcepts_.addUuidAnnotation(concept, relationshipGeneric_.getProperty(generalRel.getFSNName()).getUUID(), 
+						eConcepts_.addUuidAnnotation(concept, relationshipGeneric.getProperty(generalRel.getFSNName()).getUUID(), 
 								relationshipMetadata_.getProperty("General Rel Type").getUUID());
 					}
 					
@@ -931,7 +950,7 @@ public abstract class BaseConverter implements Mojo
 					{
 						Relationship generalRel = nameToRel_.get(r.getInverseRelType());
 						
-						eConcepts_.addUuidAnnotation(concept, relationshipGeneric_.getProperty(generalRel.getFSNName()).getUUID(), 
+						eConcepts_.addUuidAnnotation(concept, relationshipGeneric.getProperty(generalRel.getFSNName()).getUUID(), 
 								relationshipMetadata_.getProperty("Inverse General Rel Type").getUUID());
 					}
 					
@@ -950,10 +969,10 @@ public abstract class BaseConverter implements Mojo
 			});
 		}
 		
-		eConcepts_.loadMetaDataItems(relationshipGeneric_, terminologyMetadataRoot, dos_);
-		ptRelationshipGeneric_.put(sab, relationshipGeneric_);
-		eConcepts_.loadMetaDataItems(relationshipSpecificType_, terminologyMetadataRoot, dos_);
-		ptRelationshipSpecificTypes_.put(sab, relationshipSpecificType_);
+		eConcepts_.loadMetaDataItems(relationshipGeneric, terminologyMetadataRoot, dos_);
+		ptRelationshipGeneric_.put(sab, relationshipGeneric);
+		eConcepts_.loadMetaDataItems(relationshipSpecificType, terminologyMetadataRoot, dos_);
+		ptRelationshipSpecificTypes_.put(sab, relationshipSpecificType);
 	}
 	
 	protected void processSemanticTypes(EConcept concept, ResultSet rs) throws SQLException
