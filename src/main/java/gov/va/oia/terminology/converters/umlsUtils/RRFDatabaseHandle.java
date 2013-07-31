@@ -17,6 +17,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -261,6 +262,7 @@ public class RRFDatabaseHandle
 
 		int rowCount = 0;
 		int sabSkipCount = 0;
+		HashSet<String> skippedSabs = new HashSet<>();
 		while (data.hasNextRow())
 		{
 			List<String> cols = data.getNextRow();
@@ -273,6 +275,7 @@ public class RRFDatabaseHandle
 			{
 				if (!sabHashSet.contains(cols.get(sabFilterColumn)))
 				{
+					skippedSabs.add(cols.get(sabFilterColumn));
 					sabSkipCount++;
 					continue;
 				}
@@ -357,7 +360,7 @@ public class RRFDatabaseHandle
 		ConsoleUtil.println("Loaded " + rowCount + " rows");
 		if (sabSkipCount > 0)
 		{
-			ConsoleUtil.println("Skipped " + sabSkipCount+ " rows for not matching the SAB filter");
+			ConsoleUtil.println("Skipped " + sabSkipCount+ " rows for not matching the SAB filter - " + Arrays.toString(skippedSabs.toArray(new String[] {})));
 		}
 	}
 
