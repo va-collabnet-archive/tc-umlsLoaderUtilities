@@ -127,6 +127,14 @@ public abstract class BaseConverter implements Mojo
 				sabsInDB_.add(sab);
 			}
 			rs.close();
+			
+			rs = s.executeQuery("Select distinct SAB from MRREL");
+			while (rs.next())
+			{
+				String sab = rs.getString("SAB");
+				sabsInDB_.add(sab);
+			}
+			rs.close();
 			s.close();
 		}
 
@@ -534,6 +542,8 @@ public abstract class BaseConverter implements Mojo
 		{
 			UUID termSpecificMetadataRoot;
 			String terminologyName;
+			
+			ConsoleUtil.println("Setting up metadata for " + sab);
 			
 			if (isRxNorm)
 			{
@@ -1042,6 +1052,8 @@ public abstract class BaseConverter implements Mojo
 	 */
 	protected void addRelationships(EConcept concept, ResultSet rs, boolean lookedUp2) throws SQLException
 	{
+		//TODO on the AUI rels, we now sometimes end up with duplicate rels, that really should be joined together.
+		
 		while (rs.next())
 		{
 			String cui1 = rs.getString(isRxNorm ? "RXCUI1" : "CUI1");
@@ -1114,7 +1126,17 @@ public abstract class BaseConverter implements Mojo
 				}
 				if (rela != null)  //we already used rela - annotate with rel.
 				{
-					eConcepts_.addUuidAnnotation(r, ptRelationshipGeneric_.get(sab).getProperty(rel).getUUID(), ptUMLSAttributes_.getProperty("Generic rel type").getUUID());
+					Property genericType = ptRelationshipGeneric_.get(sab).getProperty(rel);
+					boolean reversed = false;
+					if (genericType == null && rela.equals("mapped_from"))
+					{
+						//This is to handle non-sensical data in UMLS... they have no consistency in the generic rel they assign - sometimes RB, sometimes RN.
+						//reverse it - currently, only an issue on 'mapped_from' rels - as the code in Relationship.java has some exceptions for this type.
+						genericType = ptRelationshipGeneric_.get(sab).getProperty(reverseRel(rel));
+						reversed = true;
+					}
+					eConcepts_.addUuidAnnotation(r, genericType.getUUID(), 
+							ptUMLSAttributes_.getProperty(reversed ? "Generic rel type (inverse)" : "Generic rel type").getUUID());
 				}
 				if (rui != null)
 				{
