@@ -16,6 +16,7 @@ import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Refsets;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Relationship_Metadata;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_SAB_Metadata;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_UMLS_Relationships;
+import gov.va.oia.terminology.converters.umlsUtils.rrf.REL;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -25,10 +26,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
@@ -63,8 +66,8 @@ public abstract class BaseConverter implements Mojo
 	protected HashMap<String, PropertyType> ptDescriptions_ = new HashMap<>();;
 	protected HashMap<String, PropertyType> ptRelationshipGeneric_ = new HashMap<>();;
 	protected HashMap<String, PropertyType> ptRelationshipSpecificTypes_ = new HashMap<>();;
-	private PropertyType relationshipMetadata_;
-	protected HashMap<String, Relationship> nameToRel_ = new HashMap<>();
+	protected PropertyType ptRelationshipMetadata_;
+	public HashMap<String, Relationship> nameToRel_ = new HashMap<>();
 	protected HashMap<String, UUID> semanticTypes_ = new HashMap<>();
 	protected EConceptUtility eConcepts_;
 	protected DataOutputStream dos_;
@@ -73,7 +76,7 @@ public abstract class BaseConverter implements Mojo
 	//sabQueryString is only populated if they provided a filter list
 	protected String sabQueryString_ = "";
 	protected HashSet<String> sabsInDB_ = new HashSet<>();
-	private boolean isRxNorm;
+	public boolean isRxNorm;
 	
 	private HashSet<String> rootConcepts_ = new HashSet<>();
 	protected UUID umlsRootConcept_ = null;
@@ -84,6 +87,10 @@ public abstract class BaseConverter implements Mojo
 	
 	private HashSet<UUID> loadedRels_ = new HashSet<>();
 	private HashSet<UUID> skippedRels_ = new HashSet<>();
+	
+	//disabled debug code
+	//protected HashSet<UUID> conceptUUIDsUsedInRels_ = new HashSet<>();
+	//protected HashSet<UUID> conceptUUIDsCreated_ = new HashSet<>();
 	
 	/**
 	 * If sabList is null or empty, no sab filtering is done. 
@@ -194,6 +201,16 @@ public abstract class BaseConverter implements Mojo
 		{
 			ConsoleUtil.println(s);
 		}
+		
+		//disabled debug code
+		//conceptUUIDsUsedInRels_.removeAll(conceptUUIDsCreated_);
+		//if (conceptUUIDsUsedInRels_.size() > 0)
+		//{
+		//	for (UUID uuid : conceptUUIDsUsedInRels_)
+		//	{
+		//		ConsoleUtil.printErrorln("ERROR!  Didn't create concept: " + uuid.toString());
+		//	}
+		//}
 
 		// this could be removed from final release. Just added to help debug editor problems.
 		ConsoleUtil.println("Dumping UUID Debug File");
@@ -216,11 +233,11 @@ public abstract class BaseConverter implements Mojo
 		ptUMLSRefsets_ = new PT_Refsets(isRxNorm ? "RxNorm RRF" : "UMLS");
 		ptContentVersion_ = new BPT_ContentVersion();
 		final PropertyType sourceMetadata = new PT_SAB_Metadata();
-		relationshipMetadata_ = new PT_Relationship_Metadata();
+		ptRelationshipMetadata_ = new PT_Relationship_Metadata();
 		ptUMLSRelationships_ = new PT_UMLS_Relationships();
 
 		//don't load ptContentVersion_ yet - custom code might add to it
-		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, sourceMetadata, relationshipMetadata_, ptUMLSAttributes_, ptUMLSRelationships_),
+		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, sourceMetadata, ptRelationshipMetadata_, ptUMLSAttributes_, ptUMLSRelationships_),
 				metaDataRoot_, dos_);
 		
 		loadTerminologySpecificMetadata();
@@ -923,19 +940,19 @@ public abstract class BaseConverter implements Mojo
 					if (r.getInverseFSNName() != null)
 					{
 						eConcepts_.addDescription(concept, r.getInverseFSNName(), DescriptionType.FSN, false, null, 
-								relationshipMetadata_.getProperty("Inverse FSN").getUUID(), false);
+								ptRelationshipMetadata_.getProperty("Inverse FSN").getUUID(), false);
 					}
 					
 					if (r.getPreferredName() != null)
 					{
 						eConcepts_.addDescription(concept, r.getInversePreferredName(), DescriptionType.SYNONYM, true, null, 
-								relationshipMetadata_.getProperty("Inverse Preferred Name").getUUID(), false);
+								ptRelationshipMetadata_.getProperty("Inverse Preferred Name").getUUID(), false);
 					}
 					
 					if (r.getInverseDescription() != null)
 					{
 						eConcepts_.addDescription(concept, r.getInverseDescription(), DescriptionType.DEFINITION, true, null, 
-								relationshipMetadata_.getProperty("Inverse Description").getUUID(), false);
+								ptRelationshipMetadata_.getProperty("Inverse Description").getUUID(), false);
 					}
 					
 					if (r.getRelType() != null)
@@ -943,7 +960,7 @@ public abstract class BaseConverter implements Mojo
 						Relationship generalRel = nameToRel_.get(r.getRelType());
 						
 						eConcepts_.addUuidAnnotation(concept, relationshipGeneric.getProperty(generalRel.getFSNName()).getUUID(), 
-								relationshipMetadata_.getProperty("General Rel Type").getUUID());
+								ptRelationshipMetadata_.getProperty("General Rel Type").getUUID());
 					}
 					
 					if (r.getInverseRelType() != null)
@@ -951,19 +968,19 @@ public abstract class BaseConverter implements Mojo
 						Relationship generalRel = nameToRel_.get(r.getInverseRelType());
 						
 						eConcepts_.addUuidAnnotation(concept, relationshipGeneric.getProperty(generalRel.getFSNName()).getUUID(), 
-								relationshipMetadata_.getProperty("Inverse General Rel Type").getUUID());
+								ptRelationshipMetadata_.getProperty("Inverse General Rel Type").getUUID());
 					}
 					
 					if (r.getRelSnomedCode() != null)
 					{
 						eConcepts_.addUuidAnnotation(concept, Type3UuidFactory.fromSNOMED(r.getRelSnomedCode()), 
-								relationshipMetadata_.getProperty("Snomed Code").getUUID());
+								ptRelationshipMetadata_.getProperty("Snomed Code").getUUID());
 					}
 					
 					if (r.getInverseRelSnomedCode() != null)
 					{
 						eConcepts_.addUuidAnnotation(concept, Type3UuidFactory.fromSNOMED(r.getInverseRelSnomedCode()), 
-								relationshipMetadata_.getProperty("Inverse Snomed Code").getUUID());
+								ptRelationshipMetadata_.getProperty("Inverse Snomed Code").getUUID());
 					}
 				}
 			});
@@ -996,17 +1013,17 @@ public abstract class BaseConverter implements Mojo
 	/**
 	 * Add the attribute value(s) for each given type, with nested attributes linking to the AUI(s) that they came from.  
 	 */
-	protected void loadGroupStringAttributes(EConcept concept, String auiName, HashMap<UUID, HashMap<String, HashSet<String>>> values)
+	protected void loadGroupStringAttributes(TkComponent<?> component, UUID annotationRefset, HashMap<UUID, HashMap<String, HashSet<String>>> values)
 	{
 		for (Entry<UUID, HashMap<String, HashSet<String>>> dataType : values.entrySet())
 		{
 			for (Entry<String, HashSet<String>> valueAui : dataType.getValue().entrySet())
 			{
 				String value = valueAui.getKey();
-				TkRefsetStrMember attribute = eConcepts_.addStringAnnotation(concept, value, dataType.getKey(), false);
+				TkRefsetStrMember attribute = eConcepts_.addStringAnnotation(component, value, dataType.getKey(), false);
 				for (String aui : valueAui.getValue())
 				{
-					eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+					eConcepts_.addStringAnnotation(attribute, aui, annotationRefset, false);
 				}
 			}
 		}
@@ -1015,17 +1032,17 @@ public abstract class BaseConverter implements Mojo
 	/**
 	 * Add the attribute value(s) for each given type, with nested attributes linking to the AUI(s) that they came from.  
 	 */
-	protected void loadGroupUUIDAttributes(EConcept concept, String auiName, HashMap<UUID, HashMap<UUID, HashSet<String>>> values)
+	protected void loadGroupUUIDAttributes(TkComponent<?> component, UUID annotationRefset, HashMap<UUID, HashMap<UUID, HashSet<String>>> values)
 	{
 		for (Entry<UUID, HashMap<UUID, HashSet<String>>> dataType : values.entrySet())
 		{
 			for (Entry<UUID, HashSet<String>> valueAui : dataType.getValue().entrySet())
 			{
 				UUID value = valueAui.getKey();
-				TkRefexUuidMember attribute = eConcepts_.addUuidAnnotation(concept, value, dataType.getKey());
+				TkRefexUuidMember attribute = eConcepts_.addUuidAnnotation(component, value, dataType.getKey());
 				for (String aui : valueAui.getValue())
 				{
-					eConcepts_.addStringAnnotation(attribute, aui, ptUMLSAttributes_.getProperty(auiName).getUUID(), false);
+					eConcepts_.addStringAnnotation(attribute, aui, annotationRefset, false);
 				}
 			}
 		}
@@ -1033,6 +1050,10 @@ public abstract class BaseConverter implements Mojo
 	
 	protected void addAttributeToGroup(HashMap<UUID, HashMap<String, HashSet<String>>> group, UUID typeForColName, String value, String aui)
 	{
+		if (aui == null || value == null)
+		{
+			return;
+		}
 		HashMap<String, HashSet<String>> colData = group.get(typeForColName);
 		if (colData == null)
 		{
@@ -1050,6 +1071,10 @@ public abstract class BaseConverter implements Mojo
 	
 	protected void addAttributeToGroup(HashMap<UUID, HashMap<UUID, HashSet<String>>> group, UUID typeForColName, UUID value, String aui)
 	{
+		if (aui == null || value == null)
+		{
+			return;
+		}
 		HashMap<UUID, HashSet<String>> colData = group.get(typeForColName);
 		if (colData == null)
 		{
@@ -1065,161 +1090,183 @@ public abstract class BaseConverter implements Mojo
 		auis.add(aui);
 	}
 	
+	protected UUID createCUIConceptUUID(String cui)
+	{
+		return ConverterUUID.createNamespaceUUIDFromString("CUI:" + cui, true);
+	}
+	
+	protected UUID createCuiSabCodeConceptUUID(String cui, String sab, String code)
+	{
+		return ConverterUUID.createNamespaceUUIDFromString("CODE:" + cui + ":" + sab + ":" + code, true);
+	}
+	
 	/**
 	 * @param isCUI - true for CUI, false for AUI
 	 * @throws SQLException
 	 */
-	protected void addRelationships(EConcept concept, ResultSet rs, boolean lookedUp2) throws SQLException
+	protected void addRelationships(EConcept concept, List<REL> relationships) throws SQLException
 	{
-		//TODO on the AUI rels, we now sometimes end up with duplicate rels, that really should be joined together.
+		HashMap<UUID, List<REL>> uniqueRels = new HashMap<>();
 		
-		while (rs.next())
+		//preprocess - set up the source and target UUIDs for this rel, so we can identify duplicates.
+		//Note - the duplicates we are detecting here are rels that point to the same WB code concept, that occur 
+		//due to the way that we combine AUI's.  This is not detecting duplicates caused by forward/reverse rels in the UMLS.
+		for (REL relationship : relationships)
 		{
-			String cui1 = rs.getString(isRxNorm ? "RXCUI1" : "CUI1");
-			String aui1 = rs.getString(isRxNorm ? "RXAUI1" : "AUI1");
-			String stype1 = rs.getString("STYPE1");
-			String rel = rs.getString("REL");
-			String cui2 = rs.getString(isRxNorm ? "RXCUI2" : "CUI2");
-			String aui2 = rs.getString(isRxNorm ? "RXAUI2" : "AUI2");
-			String stype2 = rs.getString("STYPE2");
-			String rela = rs.getString("RELA");
-			String rui = rs.getString("RUI");
-			String srui = rs.getString("SRUI");
-			String sab = rs.getString("SAB");
-			String sl = rs.getString("SL");
-			String rg = rs.getString("RG");
-			String dir = rs.getString("DIR");
-			String suppress = rs.getString("SUPPRESS");
-			String cvf = rs.getObject("CVF") == null ? null : rs.getString("CVF");  //integer or string
+			relationship.setSourceUUID(concept.getPrimordialUuid());
 			
-			
-			String targetCui = lookedUp2 ? cui1 : cui2;
-			String targetAui = lookedUp2 ? aui1 : aui2;
-			
-			String sourceCui = lookedUp2 ? cui2 : cui1;
-			String sourceAui = lookedUp2 ? aui2 : aui1;
-			
-			if (!lookedUp2)
+			if (relationship.getSourceAUI() == null)
 			{
-				rel = reverseRel(rel);
-				rela = reverseRel(rela);
+				relationship.setTargetUUID(createCUIConceptUUID(relationship.getTargetCUI()));
+			}
+			else
+			{
+				relationship.setTargetUUID(createCuiSabCodeConceptUUID((isRxNorm ? relationship.getRxNormTargetCUI() : relationship.getTargetCUI()), 
+						relationship.getTargetSAB(), relationship.getTargetCode()));
 			}
 			
-			if (isRelPrimary(rel, rela))
+			List<REL> rels = uniqueRels.get(relationship.getRelHash());
+			if (rels == null)
+			{
+				rels = new ArrayList<REL>(4);
+				uniqueRels.put(relationship.getRelHash(), rels);
+			}
+			rels.add(relationship);
+		}
+		
+		for (List<REL> duplicateRels : uniqueRels.values())
+		{
+			//We currently don't check the properties on the (duplicate) inverse rels to make sure they are all present - we assume that they 
+			//created the inverse relationships as an exact copy of the primary rel direction.  So, just checking the first rel from our dupe list is good enough
+			if (isRelPrimary(duplicateRels.get(0).getRel(), duplicateRels.get(0).getRela()))
 			{
 				//This can happen when the reverse of the rel equals the rel... sib/sib
-				if (relCheckIsRelLoaded(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI")))
+				if (relCheckIsRelLoaded(duplicateRels.get(0)))
 				{
 					continue;
 				}
 				
 				Property relType = null;
-				if (rela == null)
+				if (duplicateRels.get(0).getRela() == null)
 				{
-					relType = ptRelationshipGeneric_.get(sab).getProperty(rel);
+					relType = ptRelationshipGeneric_.get(duplicateRels.get(0).getSab()).getProperty(duplicateRels.get(0).getRel());
 				}
 				else
 				{
-					relType = ptRelationshipSpecificTypes_.get(sab).getProperty(rela);
+					relType = ptRelationshipSpecificTypes_.get(duplicateRels.get(0).getSab()).getProperty(duplicateRels.get(0).getRela());
 				}
-				
-				UUID targetConcept = ConverterUUID.createNamespaceUUIDFromString((targetAui == null ? "CUI" + targetCui : "AUI" + targetAui), true);
 				
 				TkRelationship r;
 				
 				if (relType.getWBTypeUUID() == null)
 				{
-					r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
-						targetConcept, relType.getUUID(), null, null, null);
+					r = eConcepts_.addRelationship(concept, (duplicateRels.get(0).getRui() != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + duplicateRels.get(0).getRui()) : null),
+							duplicateRels.get(0).getTargetUUID(), relType.getUUID(), null, null, null);
 				}
 				else  //need to swap out to the wb rel type (usually, isa)
 				{
-					r = eConcepts_.addRelationship(concept, (rui != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + rui) : null),
-							targetConcept, relType.getWBTypeUUID(), relType.getUUID(), relType.getPropertyType().getPropertyTypeReferenceSetUUID(), null);
+					r = eConcepts_.addRelationship(concept, (duplicateRels.get(0).getRui() != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + duplicateRels.get(0).getRui()) : null),
+							duplicateRels.get(0).getTargetUUID(), relType.getWBTypeUUID(), relType.getUUID(), relType.getPropertyType().getPropertyTypeReferenceSetUUID(), null);
 				}
 				
-				if (!isRxNorm)  //dropped for space concerns
+				//disabled debug code
+				//conceptUUIDsUsedInRels_.add(concept.getPrimordialUuid());
+				//conceptUUIDsUsedInRels_.add(duplicateRels.get(0).getTargetUUID());
+				
+				HashMap<UUID, HashMap<String, HashSet<String>>> stringAttributes = new HashMap<>();
+				HashMap<UUID, HashMap<UUID, HashSet<String>>> uuidAttributes = new HashMap<>();
+				
+				//Now we have created a single relationship for this REL - iterate all of the duplicate definitions of this rel to pick up all of the unique annotations
+				//that we need.
+				for (REL dupeRel : duplicateRels)
 				{
-					eConcepts_.addStringAnnotation(r, stype1, ptUMLSAttributes_.getProperty("STYPE1").getUUID(), false);
-					eConcepts_.addStringAnnotation(r, stype2, ptUMLSAttributes_.getProperty("STYPE2").getUUID(), false);
-				}
-				if (rela != null)  //we already used rela - annotate with rel.
-				{
-					Property genericType = ptRelationshipGeneric_.get(sab).getProperty(rel);
-					boolean reversed = false;
-					if (genericType == null && rela.equals("mapped_from"))
+					if (!isRxNorm)  //dropped for space concerns
 					{
-						//This is to handle non-sensical data in UMLS... they have no consistency in the generic rel they assign - sometimes RB, sometimes RN.
-						//reverse it - currently, only an issue on 'mapped_from' rels - as the code in Relationship.java has some exceptions for this type.
-						genericType = ptRelationshipGeneric_.get(sab).getProperty(reverseRel(rel));
-						reversed = true;
+						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("STYPE1").getUUID(), dupeRel.getStype1(), dupeRel.getSourceTargetAnnotationLabel());
+						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("STYPE2").getUUID(), dupeRel.getStype2(), dupeRel.getSourceTargetAnnotationLabel());
 					}
-					eConcepts_.addUuidAnnotation(r, genericType.getUUID(), 
-							ptUMLSAttributes_.getProperty(reversed ? "Generic rel type (inverse)" : "Generic rel type").getUUID());
+					if (dupeRel.getRela() != null)  //we already used rela - annotate with rel.
+					{
+						Property genericType = ptRelationshipGeneric_.get(dupeRel.getSab()).getProperty(dupeRel.getRel());
+						boolean reversed = false;
+						if (genericType == null && dupeRel.getRela().equals("mapped_from"))
+						{
+							//This is to handle non-sensical data in UMLS... they have no consistency in the generic rel they assign - sometimes RB, sometimes RN.
+							//reverse it - currently, only an issue on 'mapped_from' rels - as the code in Relationship.java has some exceptions for this type.
+							genericType = ptRelationshipGeneric_.get(dupeRel.getSab()).getProperty(reverseRel(dupeRel.getRel()));
+							reversed = true;
+						}
+						addAttributeToGroup(uuidAttributes, ptUMLSAttributes_.getProperty(reversed ? "Generic rel type (inverse)" : "Generic rel type").getUUID(),
+								genericType.getUUID(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					if (dupeRel.getRui() != null)
+					{
+						eConcepts_.addAdditionalIds(r, dupeRel.getRui(), ptIds_.getProperty("RUI").getUUID());
+						satRelStatement_.clearParameters();
+						satRelStatement_.setString(1, dupeRel.getRui());
+						ResultSet nestedRels = satRelStatement_.executeQuery();
+						processSAT(r, nestedRels, null, dupeRel.getSab());
+					}
+					if (!isRxNorm && dupeRel.getSrui() != null)
+					{
+						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("SRUI").getUUID(), dupeRel.getSrui(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					
+					if (!isRxNorm)
+					{
+						//always rxnorm for rxnorm, don't bother loading.
+						addAttributeToGroup(uuidAttributes, ptUMLSAttributes_.getProperty("SAB").getUUID(),
+								ptSABs_.getProperty(dupeRel.getSab()).getUUID(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					if (!isRxNorm && dupeRel.getSl() != null && !dupeRel.getSl().equals(dupeRel.getSab()))  //I don't  think this ever actually happens
+					{
+						addAttributeToGroup(uuidAttributes, ptUMLSAttributes_.getProperty("SL").getUUID(),
+								ptSABs_.getProperty(dupeRel.getSl()).getUUID(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					if (dupeRel.getRg() != null)
+					{
+						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("RG").getUUID(), dupeRel.getRg(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					if (dupeRel.getDir() != null)
+					{
+						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("DIR").getUUID(), dupeRel.getDir(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					if (dupeRel.getSuppress() != null)
+					{
+						addAttributeToGroup(uuidAttributes, ptUMLSAttributes_.getProperty("SUPPRESS").getUUID(),
+								ptSuppress_.getProperty(dupeRel.getSuppress()).getUUID(), dupeRel.getSourceTargetAnnotationLabel());
+					}
+					
+					//Add an attribute that says which relationship this attribute came from (can't use RUI, as it isn't provided consistently)
+					eConcepts_.addStringAnnotation(r, dupeRel.getSourceTargetAnnotationLabel(), ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), false);
+					
 				}
-				if (rui != null)
-				{
-					eConcepts_.addAdditionalIds(r, rui, ptIds_.getProperty("RUI").getUUID());
-					satRelStatement_.clearParameters();
-					satRelStatement_.setString(1, rui);
-					ResultSet nestedRels = satRelStatement_.executeQuery();
-					processSAT(r, nestedRels, null, sab);
-				}
-				if (!isRxNorm && srui != null)
-				{
-					eConcepts_.addStringAnnotation(r, srui, ptUMLSAttributes_.getProperty("SRUI").getUUID(), false);
-				}
-				
-				if (!isRxNorm)
-				{
-					//always rxnorm for rxnorm, don't bother loading.
-					eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptUMLSAttributes_.getProperty("SAB").getUUID());
-				}
-				if (!isRxNorm && sl != null && !sl.equals(sab))  //I don't  think this ever actually happens
-				{
-					eConcepts_.addUuidAnnotation(r, ptSABs_.getProperty(sab).getUUID(), ptUMLSAttributes_.getProperty("SL").getUUID());
-				}
-				if (rg != null)
-				{
-					eConcepts_.addStringAnnotation(r, rg, ptUMLSAttributes_.getProperty("RG").getUUID(), false);
-				}
-				if (dir != null)
-				{
-					eConcepts_.addStringAnnotation(r, dir, ptUMLSAttributes_.getProperty("DIR").getUUID(), false);
-				}
-				if (suppress != null)
-				{
-					eConcepts_.addUuidAnnotation(r, ptSuppress_.getProperty(suppress).getUUID(), ptUMLSAttributes_.getProperty("SUPPRESS").getUUID());
-				}
-				if (sourceAui != null)
-				{
-					//If sourceAUI was defined, annotate with the AUI that this rel came from, since it is being placed on a concept that combines multiple AUIs
-					eConcepts_.addStringAnnotation(r, sourceAui, relationshipMetadata_.getProperty("Source AUI").getUUID(), false);
-				}
-				if (targetAui != null)
-				{
-					//If sourceAUI was defined, annotate with the AUI that this rel came from, since it is being placed on a concept that combines multiple AUIs
-					eConcepts_.addStringAnnotation(r, targetAui, relationshipMetadata_.getProperty("Target AUI").getUUID(), false);
-				}
-				processRelCVFAttributes(r, cvf);
 
-				relCheckLoadedRel(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI"));
+				loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes);
+				loadGroupUUIDAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), uuidAttributes);
+				processRelCVFAttributes(r, duplicateRels);
+				
+				relCheckLoadedRel(duplicateRels.get(0));
 			}
 			else
 			{
-				relCheckSkippedRel(rel, rela, sourceCui + sourceAui, targetCui + targetAui, (targetAui == null ? "CUI" : "AUI"));
+				relCheckSkippedRel(duplicateRels.get(0));
 			}
 		}
-		rs.close();
 	}
 	
 	//This is overridden by RXNorm, which handles it differently
-	protected void processRelCVFAttributes(TkRelationship r, String cvf)
+	protected void processRelCVFAttributes(TkRelationship r, List<REL> duplicateRelationships)
 	{
-		if (cvf != null)
+		HashMap<UUID, HashMap<String, HashSet<String>>> stringAttributes = new HashMap<>();
+		for (REL dupeRel : duplicateRelationships)
 		{
-			eConcepts_.addStringAnnotation(r, cvf, ptUMLSAttributes_.getProperty("CVF").getUUID(), false);
+			if (dupeRel.getCvf() != null)
+			{
+				addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("CVF").getUUID(), dupeRel.getCvf(), dupeRel.getSourceTargetAnnotationLabel());
+			}
 		}
+		loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes);
 	}
 	
 	private boolean isRelPrimary(String relName, String relaName)
@@ -1234,7 +1281,7 @@ public abstract class BaseConverter implements Mojo
 		}
 	}
 	
-	private String reverseRel(String eitherRelType)
+	public String reverseRel(String eitherRelType)
 	{
 		if (eitherRelType == null)
 		{
@@ -1256,38 +1303,23 @@ public abstract class BaseConverter implements Mojo
 		
 	}
 	
-	private UUID hashRelationship(String rel, String rela, String source, String target, String codeType)
+	private void relCheckLoadedRel(REL rel)
 	{
-		return UUID.nameUUIDFromBytes(new String(rel + rela + source + target + codeType).getBytes());
+		loadedRels_.add(rel.getRelHash());
+		skippedRels_.remove(rel.getRelHash());
 	}
 	
-	private void relCheckLoadedRel(String rel, String rela, String source, String target, String codeType)
+	private boolean relCheckIsRelLoaded(REL rel)
 	{
-		UUID hash = hashRelationship(rel, rela, source, target, codeType);
-		loadedRels_.add(hash);
-		skippedRels_.remove(hash);
-	}
-	
-	private boolean relCheckIsRelLoaded(String rel, String rela, String source, String target, String codeType)
-	{
-		return loadedRels_.contains(hashRelationship(rel, rela, source, target, codeType));
+		return loadedRels_.contains(rel.getRelHash());
 	}
 
 	/**
 	 * Call this when a rel wasn't added because the rel was listed with the inverse name, rather than the primary name. 
 	 */
-	private void relCheckSkippedRel(String rel, String rela, String source, String target, String codeType)
+	private void relCheckSkippedRel(REL rel)
 	{
-		//Get the primary rel name, add it to the skip list
-		String primary = nameToRel_.get(rel).getFSNName();
-		String primaryExtended = null;
-		if (rela != null)
-		{
-			primaryExtended = nameToRel_.get(rela).getFSNName();
-		}
-		
-		//also reverse the cui2 / cui1
-		skippedRels_.add(hashRelationship(primary, primaryExtended, target, source, codeType));
+		skippedRels_.add(rel.getInverseRelHash(this));
 	}
 	
 	private void checkRelationships()
