@@ -649,7 +649,10 @@ public abstract class BaseConverter implements Mojo
 				rs.close();
 				s.close();
 				
-				eConcepts_.loadMetaDataItems(attributes, termSpecificMetadataRoot, dos_);
+				if (attributes.getProperties().size() > 0)
+				{
+					eConcepts_.loadMetaDataItems(attributes, termSpecificMetadataRoot, dos_);
+				}
 				ptTermAttributes_.put(sab, attributes);
 			}
 			
@@ -657,7 +660,7 @@ public abstract class BaseConverter implements Mojo
 			// And Descriptions
 			{
 				ConsoleUtil.println("Creating description types");
-				PropertyType descriptions_ = new BPT_Descriptions(terminologyName);
+				PropertyType descriptions = new BPT_Descriptions(terminologyName);
 				Statement s = db_.getConnection().createStatement();
 				ResultSet usedDescTypes;
 				if (isRxNorm )
@@ -704,7 +707,7 @@ public abstract class BaseConverter implements Mojo
 					descInfo.close();
 					ps.clearParameters();
 					Property p = makeDescriptionType(tty, expandedForm, classes);
-					descriptions_.addProperty(p);
+					descriptions.addProperty(p);
 					p.registerConceptCreationListener(new ConceptCreationNotificationListener()
 					{
 						@Override
@@ -721,10 +724,14 @@ public abstract class BaseConverter implements Mojo
 				usedDescTypes.close();
 				s.close();
 				ps.close();
-				ptDescriptions_.put(sab, descriptions_);
+				
+				ptDescriptions_.put(sab, descriptions);
 				allDescriptionsCreated(sab);
 				
-				eConcepts_.loadMetaDataItems(descriptions_, termSpecificMetadataRoot, dos_);
+				if (descriptions.getProperties().size() > 0)
+				{
+					eConcepts_.loadMetaDataItems(descriptions, termSpecificMetadataRoot, dos_);
+				}
 			}
 			
 			//Make a refset
@@ -826,7 +833,7 @@ public abstract class BaseConverter implements Mojo
 	 */
 	protected abstract void allDescriptionsCreated(String sab) throws Exception;
 	
-	protected abstract void processSAT(TkComponent<?> itemToAnnotate, ResultSet rs, String itemCode, String itemSab) throws SQLException;
+	protected abstract void processSAT(TkComponent<?> itemToAnnotate, ResultSet rs, String itemCode, String itemSab, boolean skipAuiAnnotation) throws SQLException;
 	
 	private void loadRelationshipMetadata(String terminologyName, String sab, UUID terminologyMetadataRoot) throws Exception
 	{
@@ -1034,9 +1041,15 @@ public abstract class BaseConverter implements Mojo
 			});
 		}
 		
-		eConcepts_.loadMetaDataItems(relationshipGeneric, terminologyMetadataRoot, dos_);
+		if (relationshipGeneric.getProperties().size() > 0)
+		{
+			eConcepts_.loadMetaDataItems(relationshipGeneric, terminologyMetadataRoot, dos_);
+		}
 		ptRelationshipGeneric_.put(sab, relationshipGeneric);
-		eConcepts_.loadMetaDataItems(relationshipSpecificType, terminologyMetadataRoot, dos_);
+		if (relationshipSpecificType.getProperties().size() > 0)
+		{
+			eConcepts_.loadMetaDataItems(relationshipSpecificType, terminologyMetadataRoot, dos_);
+		}
 		ptRelationshipSpecificTypes_.put(sab, relationshipSpecificType);
 	}
 	
@@ -1061,7 +1074,7 @@ public abstract class BaseConverter implements Mojo
 	/**
 	 * Add the attribute value(s) for each given type, with nested attributes linking to the AUI(s) that they came from.  
 	 */
-	protected void loadGroupStringAttributes(TkComponent<?> component, UUID annotationRefset, HashMap<UUID, HashMap<String, HashSet<String>>> values)
+	protected void loadGroupStringAttributes(TkComponent<?> component, UUID annotationRefset, HashMap<UUID, HashMap<String, HashSet<String>>> values, boolean skipNestedAUIs)
 	{
 		for (Entry<UUID, HashMap<String, HashSet<String>>> dataType : values.entrySet())
 		{
@@ -1069,9 +1082,12 @@ public abstract class BaseConverter implements Mojo
 			{
 				String value = valueAui.getKey();
 				TkRefsetStrMember attribute = eConcepts_.addStringAnnotation(component, value, dataType.getKey(), false);
-				for (String aui : valueAui.getValue())
+				if (!skipNestedAUIs)
 				{
-					eConcepts_.addStringAnnotation(attribute, aui, annotationRefset, false);
+					for (String aui : valueAui.getValue())
+					{
+						eConcepts_.addStringAnnotation(attribute, aui, annotationRefset, false);
+					}
 				}
 			}
 		}
@@ -1080,7 +1096,7 @@ public abstract class BaseConverter implements Mojo
 	/**
 	 * Add the attribute value(s) for each given type, with nested attributes linking to the AUI(s) that they came from.  
 	 */
-	protected void loadGroupUUIDAttributes(TkComponent<?> component, UUID annotationRefset, HashMap<UUID, HashMap<UUID, HashSet<String>>> values)
+	protected void loadGroupUUIDAttributes(TkComponent<?> component, UUID annotationRefset, HashMap<UUID, HashMap<UUID, HashSet<String>>> values, boolean skipNestedAUIs)
 	{
 		for (Entry<UUID, HashMap<UUID, HashSet<String>>> dataType : values.entrySet())
 		{
@@ -1088,9 +1104,12 @@ public abstract class BaseConverter implements Mojo
 			{
 				UUID value = valueAui.getKey();
 				TkRefexUuidMember attribute = eConcepts_.addUuidAnnotation(component, value, dataType.getKey());
-				for (String aui : valueAui.getValue())
+				if (!skipNestedAUIs)
 				{
-					eConcepts_.addStringAnnotation(attribute, aui, annotationRefset, false);
+					for (String aui : valueAui.getValue())
+					{
+						eConcepts_.addStringAnnotation(attribute, aui, annotationRefset, false);
+					}
 				}
 			}
 		}
@@ -1260,7 +1279,7 @@ public abstract class BaseConverter implements Mojo
 						satRelStatement_.clearParameters();
 						satRelStatement_.setString(1, dupeRel.getRui());
 						ResultSet nestedRels = satRelStatement_.executeQuery();
-						processSAT(r, nestedRels, null, dupeRel.getSab());
+						processSAT(r, nestedRels, null, dupeRel.getSab(), false);
 					}
 					if (!isRxNorm && dupeRel.getSrui() != null)
 					{
@@ -1297,8 +1316,8 @@ public abstract class BaseConverter implements Mojo
 					
 				}
 
-				loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes);
-				loadGroupUUIDAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), uuidAttributes);
+				loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes, false);
+				loadGroupUUIDAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), uuidAttributes, false);
 				processRelCVFAttributes(r, duplicateRels);
 				
 				relCheckLoadedRel(duplicateRels.get(0));
@@ -1321,7 +1340,7 @@ public abstract class BaseConverter implements Mojo
 				addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("CVF").getUUID(), dupeRel.getCvf(), dupeRel.getSourceTargetAnnotationLabel());
 			}
 		}
-		loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes);
+		loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes, false);
 	}
 	
 	private boolean isRelPrimary(String relName, String relaName)
