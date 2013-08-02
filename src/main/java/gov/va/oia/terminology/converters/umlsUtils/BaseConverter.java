@@ -78,8 +78,8 @@ public abstract class BaseConverter implements Mojo
 	protected HashSet<String> sabsInDB_ = new HashSet<>();
 	public boolean isRxNorm;
 	
-	private HashSet<String> rootConcepts_ = new HashSet<>();
-	protected UUID umlsRootConcept_ = null;
+	private HashMap<String, UUID> rootConcepts_ = new HashMap<>();
+	private UUID umlsRootConcept_ = null;
 	
 	protected UUID metaDataRoot_;
 	
@@ -95,7 +95,8 @@ public abstract class BaseConverter implements Mojo
 	/**
 	 * If sabList is null or empty, no sab filtering is done. 
 	 */
-	protected void init(File outputDirectory, String pathPrefix, String tablePrefix, PropertyType ids, PropertyType attributes, Collection<String> sabList) throws Exception
+	protected void init(File outputDirectory, String pathPrefix, String tablePrefix, PropertyType ids, PropertyType attributes, 
+			Collection<String> sabList, List<String> additionalRootConcepts) throws Exception
 	{
 		clearTargetFiles(outputDirectory);
 		tablePrefix_ = tablePrefix;
@@ -155,7 +156,7 @@ public abstract class BaseConverter implements Mojo
 		metaDataRoot_ = ConverterUUID.createNamespaceUUIDFromString("metadata");
 		eConcepts_.createAndStoreMetaDataConcept(metaDataRoot_, (isRxNorm ? "RxNorm" : "UMLS") + " RRF Metadata", false, archRoot, dos_);
 
-		loadMetaData();
+		loadMetaData(additionalRootConcepts);
 
 		ConsoleUtil.println("Metadata Statistics");
 		for (String s : eConcepts_.getLoadStats().getSummary())
@@ -228,7 +229,7 @@ public abstract class BaseConverter implements Mojo
 	protected abstract void loadCustomMetaData() throws Exception;
 	protected abstract void addCustomRefsets(BPT_Refsets refset) throws Exception;
 	
-	private void loadMetaData() throws Exception
+	private void loadMetaData(List<String> additionalRootConcepts) throws Exception
 	{
 		ptUMLSRefsets_ = new PT_Refsets(isRxNorm ? "RxNorm RRF" : "UMLS");
 		ptContentVersion_ = new BPT_ContentVersion();
@@ -525,7 +526,7 @@ public abstract class BaseConverter implements Mojo
 		loadCustomMetaData();
 		eConcepts_.loadMetaDataItems(ptContentVersion_, metaDataRoot_, dos_);
 		
-		findRootConcepts();
+		findRootConcepts(additionalRootConcepts);
 	}
 	
 	/*
@@ -740,7 +741,7 @@ public abstract class BaseConverter implements Mojo
 		ConverterUUID.configureNamespace(mainNamespace);
 	}
 	
-	private void findRootConcepts() throws IOException, SQLException
+	private void findRootConcepts(List<String> additionalRoots) throws IOException, SQLException
 	{
 		if (isRxNorm)
 		{
@@ -748,6 +749,7 @@ public abstract class BaseConverter implements Mojo
 		}
 		Statement statement = db_.getConnection().createStatement();
 		ResultSet rs = statement.executeQuery("select * from MRHIER where PAUI is null");
+		HashMap<String, UUID> sabRoots = new HashMap<>();
 		while (rs.next())
 		{
 			if (umlsRootConcept_ == null)
@@ -759,13 +761,59 @@ public abstract class BaseConverter implements Mojo
 				ConsoleUtil.println("Root concept FSN is 'UMLS Root Concepts' and the UUID is " + umlsRootConcept_);
 			}
 
-			rootConcepts_.add(rs.getString("CUI") + ":" + rs.getString("AUI"));
+			String sab = rs.getString("SAB");
+			UUID parent = sabRoots.get(sab);
+			
+			if (parent == null)
+			{
+				parent = ptSABs_.getProperty(sab).getUUID();
+				//This concept was already created, so I can't add a rel to it - create a new concept with the same UUID, let the WB merge them.
+				EConcept tempConcept = eConcepts_.createConcept(parent);
+				eConcepts_.addRelationship(tempConcept, umlsRootConcept_);
+				tempConcept.writeExternal(dos_);
+			}
+			
+			rootConcepts_.put(rs.getString("CUI") + ":" + rs.getString("AUI"), parent);
+		}
+		rs.close();
+		
+		try
+		{
+			if (additionalRoots != null)
+			{
+				for (String s : additionalRoots)
+				{
+					String[] temp = s.split("\\|");
+					String sab = temp[0];
+					String cui = temp[1];
+					String aui = temp[2];
+					
+					UUID parent = sabRoots.get(sab);
+					
+					if (parent == null)
+					{
+						parent = ptSABs_.getProperty(sab).getUUID();
+						//This concept was already created, so I can't add a rel to it - create a new concept with the same UUID, let the WB merge them.
+						EConcept tempConcept = eConcepts_.createConcept(parent);
+						eConcepts_.addRelationship(tempConcept, umlsRootConcept_);
+						tempConcept.writeExternal(dos_);
+					}
+					rootConcepts_.put(cui+ ":" + aui, parent);
+				}
+			}
+		}
+		catch (Exception e)
+		{
+			throw new RuntimeException("Couldn't parse the provided 'additionalRoots' - must be a 'SAB|CUI|AUI' triple", e);
 		}
 	}
 	
-	protected boolean isRootConcept(String cui, String aui)
+	/**
+	 * Returns the UUID of the concept this 'root' concept should link to, or null, if none.
+	 */
+	protected UUID isRootConcept(String cui, String aui)
 	{
-		return rootConcepts_.contains(cui + ":" + aui);
+		return rootConcepts_.get(cui + ":" + aui);
 	}
 	
 	/**
@@ -1050,7 +1098,7 @@ public abstract class BaseConverter implements Mojo
 	
 	protected void addAttributeToGroup(HashMap<UUID, HashMap<String, HashSet<String>>> group, UUID typeForColName, String value, String aui)
 	{
-		if (aui == null || value == null)
+		if (value == null)
 		{
 			return;
 		}
@@ -1066,12 +1114,15 @@ public abstract class BaseConverter implements Mojo
 			auis = new HashSet<>();
 			colData.put(value, auis);
 		}
-		auis.add(aui);
+		if (aui != null)
+		{
+			auis.add(aui);
+		}
 	}
 	
 	protected void addAttributeToGroup(HashMap<UUID, HashMap<UUID, HashSet<String>>> group, UUID typeForColName, UUID value, String aui)
 	{
-		if (aui == null || value == null)
+		if (value == null)
 		{
 			return;
 		}
@@ -1087,7 +1138,10 @@ public abstract class BaseConverter implements Mojo
 			auis = new HashSet<>();
 			colData.put(value, auis);
 		}
-		auis.add(aui);
+		if (aui != null)
+		{
+			auis.add(aui);
+		}
 	}
 	
 	protected UUID createCUIConceptUUID(String cui)
@@ -1180,11 +1234,12 @@ public abstract class BaseConverter implements Mojo
 				//that we need.
 				for (REL dupeRel : duplicateRels)
 				{
-					if (!isRxNorm)  //dropped for space concerns
-					{
-						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("STYPE1").getUUID(), dupeRel.getStype1(), dupeRel.getSourceTargetAnnotationLabel());
-						addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("STYPE2").getUUID(), dupeRel.getStype2(), dupeRel.getSourceTargetAnnotationLabel());
-					}
+					//on second thought, don't really need these on UMLS terms either.
+					//if (!isRxNorm)  //dropped for space concerns
+					//{
+					//	addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("STYPE1").getUUID(), dupeRel.getStype1(), dupeRel.getSourceTargetAnnotationLabel());
+					//	addAttributeToGroup(stringAttributes, ptUMLSAttributes_.getProperty("STYPE2").getUUID(), dupeRel.getStype2(), dupeRel.getSourceTargetAnnotationLabel());
+					//}
 					if (dupeRel.getRela() != null)  //we already used rela - annotate with rel.
 					{
 						Property genericType = ptRelationshipGeneric_.get(dupeRel.getSab()).getProperty(dupeRel.getRel());
