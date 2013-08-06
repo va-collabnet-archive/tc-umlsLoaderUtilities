@@ -8,11 +8,11 @@ import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.Property;
  */
 public class PT_UMLS_Relationships extends BPT_Relations
 {
-	public Property UMLS_ATOM;
+	public Property UMLS_CUI;
 	
 	public PT_UMLS_Relationships()
 	{
 		super("UMLS");
-		UMLS_ATOM = addProperty("has_UMLS_atom", null, "Relationship to link CUI and AUI UMLS concepts");
+		UMLS_CUI = addProperty("has_UMLS_CUI", null, "Relationship to link CUI and AUI identifiers from UMLS");
 	}
 }
