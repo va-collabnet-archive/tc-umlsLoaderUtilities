@@ -79,7 +79,7 @@ public abstract class BaseConverter implements Mojo
 	public boolean isRxNorm;
 	
 	private HashMap<String, UUID> rootConcepts_ = new HashMap<>();
-	private UUID umlsRootConcept_ = null;
+	protected EConcept umlsRootConcept_ = null;
 	
 	protected UUID metaDataRoot_;
 	
@@ -156,6 +156,14 @@ public abstract class BaseConverter implements Mojo
 		metaDataRoot_ = ConverterUUID.createNamespaceUUIDFromString("metadata");
 		eConcepts_.createAndStoreMetaDataConcept(metaDataRoot_, (isRxNorm ? "RxNorm" : "UMLS") + " RRF Metadata", false, archRoot, dos_);
 
+		if (!isRxNorm)
+		{
+			//Create the UMLS hierarchy root concept
+			umlsRootConcept_ = eConcepts_.createConcept("UMLS Root Concepts");
+			ConsoleUtil.println("Root concept FSN is 'UMLS Root Concepts' and the UUID is " + umlsRootConcept_.getPrimordialUuid());
+			//We write this later, so callers can still add attributes to it.
+		}
+		
 		loadMetaData(additionalRootConcepts);
 
 		ConsoleUtil.println("Metadata Statistics");
@@ -196,6 +204,7 @@ public abstract class BaseConverter implements Mojo
 		{
 			eConcepts_.storeRefsetConcepts(r, dos_);
 		}
+		umlsRootConcept_.writeExternal(dos_);
 		dos_.close();
 		ConsoleUtil.println("Load Statistics");
 		for (String s : eConcepts_.getLoadStats().getSummary())
@@ -759,15 +768,6 @@ public abstract class BaseConverter implements Mojo
 		HashMap<String, UUID> sabRoots = new HashMap<>();
 		while (rs.next())
 		{
-			if (umlsRootConcept_ == null)
-			{
-				//Create the UMLS hierarchy root concept
-				EConcept concept = eConcepts_.createConcept("UMLS Root Concepts");
-				concept.writeExternal(dos_);
-				umlsRootConcept_ = concept.getPrimordialUuid();
-				ConsoleUtil.println("Root concept FSN is 'UMLS Root Concepts' and the UUID is " + umlsRootConcept_);
-			}
-
 			String sab = rs.getString("SAB");
 			UUID parent = sabRoots.get(sab);
 			
@@ -776,7 +776,7 @@ public abstract class BaseConverter implements Mojo
 				parent = ptSABs_.getProperty(sab).getUUID();
 				//This concept was already created, so I can't add a rel to it - create a new concept with the same UUID, let the WB merge them.
 				EConcept tempConcept = eConcepts_.createConcept(parent);
-				eConcepts_.addRelationship(tempConcept, umlsRootConcept_);
+				eConcepts_.addRelationship(tempConcept, umlsRootConcept_.getPrimordialUuid());
 				tempConcept.writeExternal(dos_);
 			}
 			
@@ -802,7 +802,7 @@ public abstract class BaseConverter implements Mojo
 						parent = ptSABs_.getProperty(sab).getUUID();
 						//This concept was already created, so I can't add a rel to it - create a new concept with the same UUID, let the WB merge them.
 						EConcept tempConcept = eConcepts_.createConcept(parent);
-						eConcepts_.addRelationship(tempConcept, umlsRootConcept_);
+						eConcepts_.addRelationship(tempConcept, umlsRootConcept_.getPrimordialUuid());
 						tempConcept.writeExternal(dos_);
 					}
 					rootConcepts_.put(cui+ ":" + aui, parent);
