@@ -204,7 +204,10 @@ public abstract class BaseConverter implements Mojo
 		{
 			eConcepts_.storeRefsetConcepts(r, dos_);
 		}
-		umlsRootConcept_.writeExternal(dos_);
+		if (umlsRootConcept_ != null)
+		{
+			umlsRootConcept_.writeExternal(dos_);
+		}
 		dos_.close();
 		ConsoleUtil.println("Load Statistics");
 		for (String s : eConcepts_.getLoadStats().getSummary())
