@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.maven.plugin.Mojo;
 import org.apache.maven.plugin.logging.Log;
 import org.dwfa.cement.ArchitectonicAuxiliary;
@@ -87,6 +88,8 @@ public abstract class BaseConverter implements Mojo
 	
 	private HashSet<UUID> loadedRels_ = new HashSet<>();
 	private HashSet<UUID> skippedRels_ = new HashSet<>();
+	
+	private HashMap<String, HashMap<String, HashMap<String, AtomicInteger>>> mappingRelCounters_ = new HashMap<>();
 	
 	//disabled debug code
 	//protected HashSet<UUID> conceptUUIDsUsedInRels_ = new HashSet<>();
@@ -213,6 +216,12 @@ public abstract class BaseConverter implements Mojo
 		for (String s : eConcepts_.getLoadStats().getSummary())
 		{
 			ConsoleUtil.println(s);
+		}
+		
+		if (!isRxNorm)
+		{
+			ConsoleUtil.println("Cross-Terminology Mapping Statistics");
+			summarizeMappingRels();
 		}
 		
 		//disabled debug code
@@ -1245,6 +1254,12 @@ public abstract class BaseConverter implements Mojo
 							duplicateRels.get(0).getTargetUUID(), relType.getWBTypeUUID(), relType.getUUID(), relType.getPropertyType().getPropertyTypeReferenceSetUUID(), null);
 				}
 				
+				if (!isRxNorm)
+				{
+					//stats gathering, nothing more
+					countMappingRel(duplicateRels.get(0).getSab(), duplicateRels.get(0).getTargetSAB(), relType.getSourcePropertyNameFSN());
+				}
+				
 				//disabled debug code
 				//conceptUUIDsUsedInRels_.add(concept.getPrimordialUuid());
 				//conceptUUIDsUsedInRels_.add(duplicateRels.get(0).getTargetUUID());
@@ -1428,5 +1443,49 @@ public abstract class BaseConverter implements Mojo
 	public void setLog(Log arg0)
 	{
 		//noop
+	}
+	
+	private void countMappingRel(String sourceSAB, String targetSAB, String relName)
+	{
+		if (sourceSAB.equals(targetSAB))
+		{
+			return;
+		}
+		HashMap<String, HashMap<String, AtomicInteger>> targetToType = mappingRelCounters_.get(sourceSAB);
+		if (targetToType == null)
+		{
+			targetToType = new HashMap<>();
+			mappingRelCounters_.put(sourceSAB, targetToType);
+		}
+		HashMap<String, AtomicInteger> typeToCount = targetToType.get(targetSAB);
+		if (typeToCount == null)
+		{
+			typeToCount = new HashMap<>();
+			targetToType.put(targetSAB, typeToCount);
+		}
+		
+		AtomicInteger count = typeToCount.get(relName);
+		if (count == null)
+		{
+			count = new AtomicInteger(0);
+			typeToCount.put(relName, count);
+		}
+		count.incrementAndGet();
+	}
+	
+	protected void summarizeMappingRels()
+	{
+		for (Entry<String, HashMap<String, HashMap<String, AtomicInteger>>> counter : mappingRelCounters_.entrySet())
+		{
+			String source = counter.getKey();
+			for (Entry<String, HashMap<String, AtomicInteger>> targets : counter.getValue().entrySet())
+			{
+				String target = targets.getKey();
+				for (Entry<String, AtomicInteger> types : targets.getValue().entrySet())
+				{
+					ConsoleUtil.println("Source - " + source + " - Target - " +  target + " - Type - " + types.getKey() + " - " +  types.getValue().get());
+				}
+			}
+		}
 	}
 }
