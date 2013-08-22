@@ -984,7 +984,15 @@ public abstract class BaseConverter implements Mojo
 			Property p;
 			if (r.getIsRela())
 			{
-				p = relationshipSpecificType.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+				if (r.getFSNName().equals("isa"))
+				{
+					p = new Property(r.getFSNName(), r.getPreferredName(), r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
+					relationshipSpecificType.addProperty(p);
+				}
+				else
+				{
+					p = relationshipSpecificType.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+				}
 			}
 			else
 			{
