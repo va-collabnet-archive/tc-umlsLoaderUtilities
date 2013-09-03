@@ -4,20 +4,20 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>gov.va.oia.terminology.converters</groupId>
 	<artifactId>umlsLoaderUtilities</artifactId>
-	<version>1.1-SNAPSHOT</version>
+	<version>1.1</version>
 	<name>umlsLoaderUtilities</name>
 	<packaging>jar</packaging>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<convertersCommonCode.version>2.4-SNAPSHOT</convertersCommonCode.version>
+		<convertersCommonCode.version>2.4</convertersCommonCode.version>
 	</properties>
 
-	<!--scm>
-		<connection>scm:svn:https://csfe.aceworkspace.net/svn/repos/va-oia-terminology-converters/loinc/trunk/</connection>
-		<developerConnection>scm:svn:https://csfe.aceworkspace.net/svn/repos/va-oia-terminology-converters/loinc/trunk/</developerConnection>
-		<url>https://csfe.aceworkspace.net/integration/viewvc/viewvc.cgi/loinc/trunk/?root=va-oia-terminology-converters&amp;system=exsy1002</url>
-	</scm-->
+	<scm>
+		<connection>scm:svn:https://csfe.aceworkspace.net/svn/repos/va-oia-terminology-converters/umlsLoaderUtilities/trunk/</connection>
+		<developerConnection>scm:svn:https://csfe.aceworkspace.net/svn/repos/va-oia-terminology-converters/umlsLoaderUtilities/trunk/</developerConnection>
+		<url>https://csfe.aceworkspace.net/integration/viewvc/viewvc.cgi/umlsLoaderUtilities/trunk/?root=va-oia-terminology-converters&amp;system=exsy1002</url>
+	</scm>
 
 	<dependencies>
 		<dependency>
