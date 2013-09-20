@@ -313,6 +313,8 @@ public class Relationship
 			rs.close();
 			s.close();
 			
+			//TODO utilize MRREL DIR column - see if that helps.  Also talk to Brian, see if there is better code for this.
+			
 			if (swap == null)
 			{
 				if (name1.startsWith("inverse_") || name2.startsWith("inverse_"))  //inverse_ things as secondary
