@@ -9,25 +9,28 @@ import java.util.UUID;
 
 public class REL
 {
-	private String cui1, aui1, stype1, rel, cui2, aui2, stype2, rela, rui, srui, sab, sl, rg, dir, suppress, cvf, targetSAB, targetCODE, rxNormTargetCUI;
+	private String cui1, aui1, stype1, rel, cui2, aui2, stype2, rela, rui, srui, sab, sl, rg, dir, suppress, cvf, targetSAB, targetCODE, rxNormTargetCUI, sourceSAB;
 	
 	private UUID sourceUUID_, targetUUID_, relHash_;
 	
 	private boolean lookedUp2_;
 	
-	public static List<REL> read(ResultSet rs, boolean lookedUp2, BaseConverter bc) throws SQLException
+	private boolean snomedSpecialHandling_ = false;
+	
+	public static List<REL> read(String sourceSab, ResultSet rs, boolean lookedUp2, BaseConverter bc) throws SQLException
 	{
 		ArrayList<REL> result = new ArrayList<>();
 		while (rs.next())
 		{
-			result.add(new REL(rs, lookedUp2, bc));
+			result.add(new REL(sourceSab, rs, lookedUp2, bc));
 		}
 		rs.close();
 		return result;
 	}
 	
-	private REL(ResultSet rs, boolean lookedUp2, BaseConverter bc) throws SQLException
+	private REL(String sourceSab, ResultSet rs, boolean lookedUp2, BaseConverter bc) throws SQLException
 	{
+		sourceSAB = sourceSab;
 		lookedUp2_ = lookedUp2;
 		cui1 = rs.getString(bc.isRxNorm ? "RXCUI1" : "CUI1");
 		aui1 = rs.getString(bc.isRxNorm ? "RXAUI1" : "AUI1");
@@ -182,6 +185,22 @@ public class REL
 	public UUID getTargetUUID()
 	{
 		return targetUUID_;
+	}
+	
+	public String getSourceSAB()
+	{
+		return sourceSAB;
+	}
+	
+	public boolean hasSnomedSpecialHandling()
+	{
+		return snomedSpecialHandling_;
+	}
+	
+	public void setSnomedUUIDTarget(UUID target)
+	{
+		setTargetUUID(target);
+		snomedSpecialHandling_ = true;
 	}
 	
 	public UUID getRelHash()

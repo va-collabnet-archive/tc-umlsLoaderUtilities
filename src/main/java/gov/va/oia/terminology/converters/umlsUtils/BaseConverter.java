@@ -605,7 +605,6 @@ public abstract class BaseConverter implements Mojo
 			
 			if (isRxNorm)
 			{
-				termSpecificMetadataRoot = metaDataRoot_;
 				terminologyName = "RxNorm";
 				//Change to a different namespace, so property types that are repeated in the metadata don't collide.
 				ConverterUUID.configureNamespace(ConverterUUID.createNamespaceUUIDFromString(null, "gov.va.med.term.RRF." + tablePrefix_ + "." + terminologyName + ".metadata"));
@@ -628,7 +627,10 @@ public abstract class BaseConverter implements Mojo
 			}
 			UUID archRoot = ArchitectonicAuxiliary.Concept.ARCHITECTONIC_ROOT_CONCEPT.getPrimoridalUid();
 			termSpecificMetadataRoot = ConverterUUID.createNamespaceUUIDFromString("metadata");
-			eConcepts_.createAndStoreMetaDataConcept(termSpecificMetadataRoot, terminologyName + " Metadata", false, archRoot, dos_);
+			//If we have an item with 'special' snomed handling, hide it down under the UMLS RRF metadata - as we don't load any concepts related 
+			//to this terminology - just pulling relationships.
+			eConcepts_.createAndStoreMetaDataConcept(termSpecificMetadataRoot, terminologyName + " Metadata", false, 
+					(snomedSpecialHandling(sab) ? metaDataRoot_ : archRoot), dos_);
 			
 			//dynamically add more attributes from *DOC
 			{
@@ -1194,7 +1196,6 @@ public abstract class BaseConverter implements Mojo
 	}
 	
 	/**
-	 * @param isCUI - true for CUI, false for AUI
 	 * @throws SQLException
 	 */
 	protected void addRelationships(EConcept concept, List<REL> relationships) throws SQLException
@@ -1208,14 +1209,17 @@ public abstract class BaseConverter implements Mojo
 		{
 			relationship.setSourceUUID(concept.getPrimordialUuid());
 			
-			if (relationship.getSourceAUI() == null)
+			if (!relationship.hasSnomedSpecialHandling())
 			{
-				relationship.setTargetUUID(createCUIConceptUUID(relationship.getTargetCUI()));
-			}
-			else
-			{
-				relationship.setTargetUUID(createCuiSabCodeConceptUUID((isRxNorm ? relationship.getRxNormTargetCUI() : relationship.getTargetCUI()), 
-						relationship.getTargetSAB(), relationship.getTargetCode()));
+				if (relationship.getSourceAUI() == null)
+				{
+					relationship.setTargetUUID(createCUIConceptUUID(relationship.getTargetCUI()));
+				}
+				else
+				{
+					relationship.setTargetUUID(createCuiSabCodeConceptUUID((isRxNorm ? relationship.getRxNormTargetCUI() : relationship.getTargetCUI()), 
+							relationship.getTargetSAB(), relationship.getTargetCode()));
+				}
 			}
 			
 			List<REL> rels = uniqueRels.get(relationship.getRelHash());
@@ -1265,7 +1269,7 @@ public abstract class BaseConverter implements Mojo
 				if (!isRxNorm)
 				{
 					//stats gathering, nothing more
-					countMappingRel(duplicateRels.get(0).getSab(), duplicateRels.get(0).getTargetSAB(), relType.getSourcePropertyNameFSN());
+					countMappingRel(duplicateRels.get(0).getSourceSAB(), duplicateRels.get(0).getTargetSAB(), relType.getSourcePropertyNameFSN());
 				}
 				
 				//disabled debug code
@@ -1369,6 +1373,12 @@ public abstract class BaseConverter implements Mojo
 		loadGroupStringAttributes(r, ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), stringAttributes, false);
 	}
 	
+	//This is overridden by UMLS, which treats Snomed special in some cases
+	protected boolean snomedSpecialHandling(String sab)
+	{
+		return false;
+	}
+	
 	private boolean isRelPrimary(String relName, String relaName)
 	{
 		if (relaName != null)
@@ -1455,21 +1465,24 @@ public abstract class BaseConverter implements Mojo
 	
 	private void countMappingRel(String sourceSAB, String targetSAB, String relName)
 	{
-		if (sourceSAB.equals(targetSAB))
+		String source = sourceSAB == null ? "<CUI>" : sourceSAB;
+		String target = targetSAB == null ? "<CUI>" : targetSAB;
+
+		if (source.equals(target) && !source.equals("<CUI>"))
 		{
 			return;
 		}
-		HashMap<String, HashMap<String, AtomicInteger>> targetToType = mappingRelCounters_.get(sourceSAB);
+		HashMap<String, HashMap<String, AtomicInteger>> targetToType = mappingRelCounters_.get(source);
 		if (targetToType == null)
 		{
 			targetToType = new HashMap<>();
-			mappingRelCounters_.put(sourceSAB, targetToType);
+			mappingRelCounters_.put(source, targetToType);
 		}
-		HashMap<String, AtomicInteger> typeToCount = targetToType.get(targetSAB);
+		HashMap<String, AtomicInteger> typeToCount = targetToType.get(target);
 		if (typeToCount == null)
 		{
 			typeToCount = new HashMap<>();
-			targetToType.put(targetSAB, typeToCount);
+			targetToType.put(target, typeToCount);
 		}
 		
 		AtomicInteger count = typeToCount.get(relName);
