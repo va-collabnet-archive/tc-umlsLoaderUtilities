@@ -630,7 +630,7 @@ public abstract class BaseConverter implements Mojo
 			//If we have an item with 'special' snomed handling, hide it down under the UMLS RRF metadata - as we don't load any concepts related 
 			//to this terminology - just pulling relationships.
 			eConcepts_.createAndStoreMetaDataConcept(termSpecificMetadataRoot, terminologyName + " Metadata", false, 
-					(snomedSpecialHandling(sab) ? metaDataRoot_ : archRoot), dos_);
+					(specialHandling(sab) ? metaDataRoot_ : archRoot), dos_);
 			
 			//dynamically add more attributes from *DOC
 			{
@@ -1374,7 +1374,7 @@ public abstract class BaseConverter implements Mojo
 	}
 	
 	//This is overridden by UMLS, which treats Snomed special in some cases
-	protected boolean snomedSpecialHandling(String sab)
+	protected boolean specialHandling(String sab)
 	{
 		return false;
 	}
