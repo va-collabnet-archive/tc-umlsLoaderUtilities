@@ -183,7 +183,7 @@ public class Relationship
 		return swap ? name2 : name1;
 	}
 	
-	public String getPreferredName()
+	public String getAltName()
 	{
 		return preferredNameMap.get(getFSNName());
 	}
@@ -198,7 +198,7 @@ public class Relationship
 		return swap ? name1 : name2;
 	}
 	
-	public String getInversePreferredName()
+	public String getInverseAltName()
 	{
 		return getInverseFSNName() == null ? null : preferredNameMap.get(getInverseFSNName());
 	}

@@ -90,6 +90,7 @@ public abstract class BaseConverter implements Mojo
 	private HashSet<UUID> skippedRels_ = new HashSet<>();
 	
 	private HashMap<String, HashMap<String, HashMap<String, AtomicInteger>>> mappingRelCounters_ = new HashMap<>();
+	private HashMap<String, AbbreviationExpansion> abbreviationExpansions;
 	
 	//disabled debug code
 	//protected HashSet<UUID> conceptUUIDsUsedInRels_ = new HashSet<>();
@@ -108,6 +109,9 @@ public abstract class BaseConverter implements Mojo
 		
 		ptIds_ = ids;
 		ptUMLSAttributes_ = attributes;
+		
+		abbreviationExpansions = AbbreviationExpansion.load(
+				getClass().getResourceAsStream(isRxNorm ? "/RxNormAbbreviationsExpansions.txt" : "/UMLSAbbreviationExpansions.txt"));
 		
 		if (sabList != null && sabList.size() > 0)
 		{
@@ -268,6 +272,7 @@ public abstract class BaseConverter implements Mojo
 		ptSTypes_= new PropertyType("STYPEs"){};
 		{
 			ConsoleUtil.println("Creating STYPE types");
+			ptSTypes_.indexByAltNames();
 			Statement s = db_.getConnection().createStatement();
 			ResultSet rs = s.executeQuery("SELECT DISTINCT VALUE, TYPE, EXPL FROM " + tablePrefix_ + "DOC where DOCKEY like 'STYPE%'");
 			while (rs.next())
@@ -281,11 +286,11 @@ public abstract class BaseConverter implements Mojo
 					throw new RuntimeException("Unexpected type in the attribute data within DOC: '" + type + "'");
 				}				
 				
-				ptSTypes_.addProperty(sType, name, null);
+				ptSTypes_.addProperty(name, null, sType, null);
 			}
-			//TODO bug in UMLS - missing rows for CUI and SDUI
-			ptSTypes_.addProperty("CUI", "Concept identifier", null);
-			ptSTypes_.addProperty("SDUI", "Source asserted descriptor identifier", null);
+			//T ODO maybe a bug in metamorphosys?  I know at one point, I didn't have these.. but they exist now... ignore
+			//ptSTypes_.addProperty("Concept identifier", null, "CUI", null);
+			//ptSTypes_.addProperty("Source asserted descriptor identifier", null, "SDUI", null);
 			rs.close();
 			s.close();
 		}
@@ -298,7 +303,7 @@ public abstract class BaseConverter implements Mojo
 		//xDocLoaderHelper("COA", "Attributes of co-occurrence", false);
 		//xDocLoaderHelper("COT", "Type of co-occurrence", true);  
 		
-		final PropertyType contextTypes = xDocLoaderHelper("CXTY", "Context Type", true);
+		final PropertyType contextTypes = xDocLoaderHelper("CXTY", "Context Type", false);
 		
 		//not yet loading mappings - so don't need this yet
 		//xDocLoaderHelper("FROMTYPE", "Mapping From Type", false);  
@@ -422,7 +427,7 @@ public abstract class BaseConverter implements Mojo
 		{
 			ConsoleUtil.println("Creating Source Vocabulary types");
 			ptSABs_ = new PropertyType("Source Vocabularies"){};
-			
+			ptSABs_.indexByAltNames();
 			
 			HashSet<String> sabList = new HashSet<>();
 			sabList.addAll(sabsInDB_);
@@ -448,7 +453,7 @@ public abstract class BaseConverter implements Mojo
 				{
 					String son = rs.getString("SON");
 
-					Property p = ptSABs_.addProperty(currentSab, son, null);
+					Property p = ptSABs_.addProperty(son, null, currentSab, null);
 					p.registerConceptCreationListener(new ConceptCreationNotificationListener()
 					{
 						@Override
@@ -457,14 +462,15 @@ public abstract class BaseConverter implements Mojo
 							try
 							{
 								//lookup the other columns for the row with this newly added RSAB terminology
-								getSABMetadata.setString(1, property.getSourcePropertyNameFSN());
-								getSABMetadata.setString(2, property.getSourcePropertyNameFSN());
+								getSABMetadata.setString(1, property.getSourcePropertyAltName() == null ? property.getSourcePropertyNameFSN() : property.getSourcePropertyAltName());
+								getSABMetadata.setString(2, property.getSourcePropertyAltName() == null ? property.getSourcePropertyNameFSN() : property.getSourcePropertyAltName());
 								ResultSet rs = getSABMetadata.executeQuery();
 								if (rs.next())  //should be only one result
 								{
 									for (Property metadataProperty : sourceMetadata.getProperties())
 									{
-										String columnName = metadataProperty.getSourcePropertyNameFSN();
+										String columnName = metadataProperty.getSourcePropertyAltName() == null ? metadataProperty.getSourcePropertyNameFSN() 
+												: metadataProperty.getSourcePropertyAltName();
 										String columnValue = rs.getString(columnName);
 										if (columnValue == null)
 										{
@@ -558,6 +564,10 @@ public abstract class BaseConverter implements Mojo
 		ConsoleUtil.println("Creating '" + niceName + "' types");
 		PropertyType pt = new PropertyType(niceName) {};
 		{
+			if (!loadAsDefinition)
+			{
+				pt.indexByAltNames();
+			}
 			Statement s = db_.getConnection().createStatement();
 			ResultSet rs = s.executeQuery("SELECT VALUE, TYPE, EXPL FROM " + tablePrefix_ + "DOC where DOCKEY='" + dockey + "'");
 			while (rs.next())
@@ -577,7 +587,7 @@ public abstract class BaseConverter implements Mojo
 					throw new RuntimeException("Unexpected type in the attribute data within DOC: '" + type + "'");
 				}				
 				
-				pt.addProperty(value, (loadAsDefinition ? null : name), (loadAsDefinition ? name : null));
+				pt.addProperty((loadAsDefinition ? value : name), null, (loadAsDefinition ? null : value), (loadAsDefinition ? name : null));
 			}
 			rs.close();
 			s.close();
@@ -636,6 +646,7 @@ public abstract class BaseConverter implements Mojo
 			{
 				ConsoleUtil.println("Creating attribute types");
 				PropertyType attributes = new BPT_Attributes() {};
+				attributes.indexByAltNames();
 				
 				Statement s = db_.getConnection().createStatement();
 				//extra logic at the end to keep NDC's from any sab when processing RXNorm
@@ -663,7 +674,16 @@ public abstract class BaseConverter implements Mojo
 						preferredName = expansion;
 					}
 					
-					attributes.addProperty(abbreviation, preferredName, description);
+					AbbreviationExpansion ae = abbreviationExpansions.get(abbreviation);
+					if (ae == null)
+					{
+						ConsoleUtil.printErrorln("No Abbreviation Expansion found for " + abbreviation);
+						attributes.addProperty(abbreviation, preferredName, description);
+					}
+					else
+					{
+						attributes.addProperty(ae.getExpansion(), null, ae.getAbbreviation(), ae.getDescription());
+					}
 				}
 				if (isRxNorm)
 				{
@@ -684,6 +704,7 @@ public abstract class BaseConverter implements Mojo
 			{
 				ConsoleUtil.println("Creating description types");
 				PropertyType descriptions = new BPT_Descriptions(terminologyName);
+				descriptions.indexByAltNames();
 				Statement s = db_.getConnection().createStatement();
 				ResultSet usedDescTypes;
 				if (isRxNorm )
@@ -729,7 +750,19 @@ public abstract class BaseConverter implements Mojo
 					}
 					descInfo.close();
 					ps.clearParameters();
-					Property p = makeDescriptionType(tty, expandedForm, classes);
+					
+					Property p = null;
+					AbbreviationExpansion ae = abbreviationExpansions.get(tty);
+					if (ae == null)
+					{
+						ConsoleUtil.printErrorln("No Abbreviation Expansion found for " + tty);
+						p = makeDescriptionType(tty, expandedForm, null, null, classes);
+					}
+					else
+					{
+						p = makeDescriptionType(ae.getExpansion(), null, ae.getAbbreviation(), ae.getDescription(), classes);
+					}
+					
 					descriptions.addProperty(p);
 					p.registerConceptCreationListener(new ConceptCreationNotificationListener()
 					{
@@ -840,7 +873,7 @@ public abstract class BaseConverter implements Mojo
 	/**
 	 * Implementer needs to add an entry to ptDescriptions_ with the data provided...
 	 */
-	protected abstract Property makeDescriptionType(String fsnName, String preferredName, final Set<String> tty_classes);
+	protected abstract Property makeDescriptionType(String fsnName, String preferredName, String altName, String description, final Set<String> tty_classes);
 	
 	/**
 	 * Called just before the description set is actually created as eConcepts (in case the implementor needs to rank them all together)
@@ -958,6 +991,7 @@ public abstract class BaseConverter implements Mojo
 		}
 		
 		final PropertyType relationshipGeneric = new BPT_Relations("Relation Types Generic", terminologyName) {};  
+		relationshipGeneric.indexByAltNames();
 		final PropertyType relationshipSpecificType = new BPT_Relations(terminologyName) {}; //Relation Types - default metadata node
 		
 		s = db_.getConnection().createStatement();
@@ -988,24 +1022,26 @@ public abstract class BaseConverter implements Mojo
 			{
 				if (r.getFSNName().equals("isa"))
 				{
-					p = new Property(r.getFSNName(), r.getPreferredName(), r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
+					p = new Property(r.getFSNName(), null, r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
 					relationshipSpecificType.addProperty(p);
 				}
 				else
 				{
-					p = relationshipSpecificType.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+					p = relationshipSpecificType.addProperty(r.getFSNName(), null, r.getDescription());
 				}
 			}
 			else
 			{
 				if (r.getFSNName().equals("CHD"))
 				{
-					p = new Property(r.getFSNName(), r.getPreferredName(), r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
+					p = new Property((r.getAltName() == null ? r.getFSNName() : r.getAltName()), null, (r.getAltName() == null ? null : r.getFSNName()),
+							r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
 					relationshipGeneric.addProperty(p);
 				}
 				else
 				{
-					p = relationshipGeneric.addProperty(r.getFSNName(), r.getPreferredName(), r.getDescription());
+					p = relationshipGeneric.addProperty((r.getAltName() == null ? r.getFSNName() : r.getAltName()), null, 
+							(r.getAltName() == null ? null : r.getFSNName()), r.getDescription());
 				}
 			}
 			
@@ -1016,14 +1052,15 @@ public abstract class BaseConverter implements Mojo
 				{
 					if (r.getInverseFSNName() != null)
 					{
-						eConcepts_.addDescription(concept, r.getInverseFSNName(), DescriptionType.FSN, false, null, 
-								ptRelationshipMetadata_.getProperty("Inverse FSN").getUUID(), false);
+						eConcepts_.addDescription(concept, (r.getInverseAltName() == null ? r.getInverseFSNName() : r.getInverseAltName()), DescriptionType.FSN, 
+								false, null, ptRelationshipMetadata_.getProperty("Inverse FSN").getUUID(), false);
 					}
 					
-					if (r.getPreferredName() != null)
+					if (r.getAltName() != null)
 					{
-						eConcepts_.addDescription(concept, r.getInversePreferredName(), DescriptionType.SYNONYM, true, null, 
-								ptRelationshipMetadata_.getProperty("Inverse Preferred Name").getUUID(), false);
+						//Yes, this looks funny, no its not a copy/paste error.  We swap the FSN and alt names for... it a long story.  42.
+						eConcepts_.addDescription(concept, r.getInverseFSNName(), DescriptionType.SYNONYM, false, null, 
+								ptRelationshipMetadata_.getProperty("Inverse Synonym").getUUID(), false);
 					}
 					
 					if (r.getInverseDescription() != null)
