@@ -8,6 +8,7 @@ import java.sql.Statement;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 
 public class Relationship
 {
@@ -16,8 +17,8 @@ public class Relationship
 	private String name2;
 	private String description2;
 	
-	private String name1SnomedCode;
-	private String name2SnomedCode;
+	private HashSet<String> name1SnomedCode = new HashSet<String>();
+	private HashSet<String> name2SnomedCode = new HashSet<String>();
 	private String name1RelType;
 	private String name2RelType;
 	
@@ -122,25 +123,11 @@ public class Relationship
 	{
 		if (name.equals(name1))
 		{
-			if (name1SnomedCode == null)
-			{
-				name1SnomedCode = code;
-			}
-			else
-			{
-				throw new RuntimeException("oops");
-			}
+			name1SnomedCode.add(code);
 		}
 		else if (name.equals(name2))
 		{
-			if (name2SnomedCode == null)
-			{
-				name2SnomedCode = code;
-			}
-			else
-			{
-				throw new RuntimeException("oops");
-			}
+			name2SnomedCode.add(code);
 		}
 		else
 		{
@@ -156,7 +143,7 @@ public class Relationship
 			{
 				name1RelType = type;
 			}
-			else
+			else if (!name1RelType.equals(type))
 			{
 				throw new RuntimeException("oops");
 			}
@@ -167,7 +154,7 @@ public class Relationship
 			{
 				name2RelType = type;
 			}
-			else
+			else if (!name2RelType.equals(type))
 			{
 				throw new RuntimeException("oops");
 			}
@@ -208,12 +195,12 @@ public class Relationship
 		return swap ? description1 : description2;
 	}
 	
-	public String getRelSnomedCode()
+	public Set<String> getRelSnomedCode()
 	{
 		return swap ? name2SnomedCode : name1SnomedCode;
 	}
 	
-	public String getInverseRelSnomedCode()
+	public Set<String> getInverseRelSnomedCode()
 	{
 		return swap ? name1SnomedCode : name2SnomedCode;
 	}
@@ -360,6 +347,14 @@ public class Relationship
 				else if (name1.equals("larger_than") || name2.equals("larger_than"))  //swap smaller_than to primary
 				{
 					swap = name1.equals("larger_than");
+				}
+				else if (name1.equals("due_to") || name2.equals("due_to"))  //due_to as primary, cause_of secondary
+				{
+					swap = name2.equals("due_to");
+				}
+				else if (name1.equals("occurs_after") || name2.equals("occurs_after"))  //occurs_after as primary, occurs_before secondary
+				{
+					swap = name2.equals("occurs_after");
 				}
 			}
 		}

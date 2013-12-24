@@ -1,9 +1,12 @@
 #Abbreviation (RRF name)	expansion	description [optional]
 
 #UMLS Attribute Types
+ACTIVE	Active	
 ALT_SORT_CODE	Alt Sort Code	
 AQ	Allowable Qualifier	SNOMED CT "allowable qualifier" attribute for representing certain relationships (those having a characteristic type of "Qualifier" and a refinability of "Mandatory") which indicate one of several allowable types of qualifiers, such as laterality or severity, that a concept may have
+CASE_SIGNIFICANCE_ID	Case significance ID	
 CHARACTERISTICTYPE	Characteristic Type	SNOMED CT indication of whether a relationship specifies a defining characteristic of the source concept or a possible qualification of that Concept.
+CHARACTERISTIC_TYPE_ID	Characteristic type ID	
 CODE_ALSO	Code Also	Instructs that 2 codes may be required to fully describe a condition but the sequencing of the two codes is discretionary, depending on the severity of the conditions and the reason for the encounter.
 CODE_FIRST	Code First	Certain conditions have both an underlying etiology and multiple body system manifestations due to the underlying etiology. ICD-10-CM has a coding convention that requires the underlying condition be sequenced first followed by the manifestation. Wherever such a combination exists there is a "code first" note at the manifestation code. These instructional notes indicate the proper sequencing order of the codes, etiology followed by manifestation. In most cases the manifestation codes will have in the code title, "in diseases classified elsewhere." Codes with this title are a component of the etiology/manifestation convention. The code title indicates that it is a manifestation code. "In diseases classified elsewhere" codes are never permitted to be used as first listed or principle diagnosis codes. They must be used in conjunction with an underlying condition code and they must be listed following the underlying condition.
 CONCEPTSTATUS	Concept Status	SNOMED CT status which indicates whether a concept is in active use and, if not, indicates the reason it is inactive.
@@ -32,6 +35,10 @@ CV_PREVIOUS_META	Content View Previous Meta Version	Previous UMLS Metathesaurus 
 DA	Metathesaurus Date of entry	YYYYMMDD, e.g., 19920830 - date of entry of the concept into the Metathesaurus.
 DESCRIPTIONSTATUS	Description Status	SNOMED CT description status which indicates whether a description (concept name) is in active use and, if not, the reason it is inactive.
 DESCRIPTIONTYPE	Description Type	SNOMED CT term type, indicating whether the term is the Preferred Term, Synonym or the Fully Specified Name for the associated concept.
+DEFAULT_MODULE_ID	Default module ID	
+DEFINITION_STATUS_ID	Definition status ID
+DESCRIPTION_FORMAT	Description format	
+DESCRIPTION_LENGTH	Description length	
 EXCLUDES1	Not Coded Here	A pure excludes. It means "NOT CODED HERE!" Indicates that the code excluded should never be used at the same time as the code above the Excludes1 note. Used for when two conditions cannot occur together, such as a congenital form versus an acquired form of the same condition.
 EXCLUDES2	Not Included Here	Represents "Not included here". Indicates that the condition excluded is not part of the condition it is excluded from but a patient may have both conditions at the same time. When an Excludes2 note appears under a code it is acceptable to use both the code and the excluded code together.
 FROMRSAB	From Root Source Abbreviation	Root source abbreviation for the "from" identifiers of a map set
@@ -56,8 +63,10 @@ HTS	HCPCS Type of Service Code	carrier assigned HCFA Type of Service which descr
 HXR	HCPCS Cross reference code	an explicit reference crosswalking a deleted code or a code that is not valid for Medicare to a valid current code (or range of codes).
 ICA	ICD Additional Codes Note	an ICD-9-CM instruction to signal the coder that an additional code should be used if the information is available to provide a more complete picture of that diagnoses or procedure.
 ICC	ICD Code Also Note	an ICD-9-CM instruction to signal the coder to code additional information.
+ICD-O-3_CODE	ICD-O-3 Code	
 ICE	ICD Entry Term	(e.g. Diarrhea:{dysenteric; epidemic}; Infectious diarrheal disease)
 ICF	ICD Fifth-digit Code Note	instruction to coders indicating use of a fifth-digit code.
+INACTIVATION_INDICATOR	Inactivation indicator	
 ICN	ICD Note	instruction providing additional coding information.
 INITIALCAPITALSTATUS	Initial Capital Status	SNOMED CT capital status, indicating whether the capitalization of the first character of the SNOMED CT term is significant.
 ISPRIMITIVE	Is Primitive	SNOMED CT indicator of whether concept is primitive or fully defined by its defining characteristics.
@@ -80,6 +89,8 @@ MAPSETVSAB	Versioned source abbreviation for a map set
 MAPSETVSAB	Map Set Versioned Source Identifier	Versioned source abbreviation for a map set
 MAPSETXRTARGETID	Map set target identifier used for XR mappings.	
 MAPSETXRTARGETID	Map Set XR Target ID	Map set target identifier used for XR mappings.
+MODIFIER_ID	Modifier ID	
+MODULE_ID	Module ID	
 MR	Major revision date	YYYYMMDD - date the Metathesaurus entry for the concept underwent any revision in content.
 MTH_CODE_FIRST	MTH Code First	Certain conditions have both an underlying etiology and multiple body system manifestations due to the underlying etiology.
 MTH_EXCLUDES1	MTH Not Coded Here	pure excludes
@@ -92,19 +103,24 @@ MTH_MAPTOEXHAUSTIVE	MTH Map To Exhaustive	Indicates whether or not the "to" sour
 NOTE	Note	
 ORDER_NO	Order Number	
 REFINABILITY	Refinability	Indicates whether it is possible or mandatory to refine the atom when this relationship is used as a template for clinical data entry.
+REFSET_PATTERN	Refset pattern	
 SNOMEDID	SNOMED ID	SNOMED RT identifier for a SNOMED CT concept	
 SOS	Scope Statement	
+SOURCE_EFFECTIVE_TIME	Source effective time	
 ST	Concept Attributes Status	Valid values: R Reviewed, U Unreviewed
 SUBSETCONTEXTID	Subset Context ID	SNOMED CT identifier of a subset
 SUBSETLANGUAGECODE	Subset Language Code	SNOMED CT identifier of a language and, if appropriate, a dialect to which a subset applies.
 SUBSETMEMBER	Subset Member	Indicates the subset(s) to which an atom belongs and its status (e.g., active, inactive) in the subset(s).
+SUBSET_MEMBER	Subset member	
 SUBSETORIGINALID	Subset Original ID	SNOMED CT identifier for the first version of the subset on which this subset is based.
 SUBSETREALMID	Subset Realm ID	“Realm" or context in which a SNOMED CT subset is used, e.g., nation, speciality, institution, etc. to which it applies. A four-character ISO6523 identifier followed by an optional series of concatenated subdivisions codes defined by the registered organization.
 SUBSETTYPE	Subset Type	Single digit integer indicating the nature of a SNOMED CT subset and the type of SNOMED CT component that may be a member of the subset. The meaning of the non-zero values can be found in the SNOMED CT documentation; a value of 0 is not defined as a type.
 SUBSETVERSION	Subset Version	SNOMED CT identifier for the version of a subset. An integer increased for each revised release.
 TARGETSCHEMEID	Target Scheme ID	Identifier for the target scheme in the map set. This may be an International Coding Scheme Identifier (ISO7826) or an Object Identifier (OID) used as specified by HL7.
+TARGET_EFFECTIVE_TIME	Target effective time	
 TORSAB	To Root Source Abbreviation	Root source abbreviation for the "to" identifiers of a map set
 TOVSAB	To Versioned Source Abbreviations	Versioned source abbreviation for the "to" identifiers of a map set
+TYPE_ID	Type ID	
 UMLSREL	UMLS Metathesaurus REL Relationship	The UMLS Metathesaurus REL relationship (SY, CHD, RN, RB, RO) assigned to SNOMED CT relationship identifiers.
 UMLSRELA	UMLS Relationship Attribute	
 USE_ADDITIONAL	Use Additional	Certain conditions have both an underlying etiology and multiple body system manifestations due to the underlying etiology. ICD-10-CM has a coding convention that requires the underlying condition be sequenced first followed by the manifestation. Wherever such a combination exists there is a "use additional code" note at the etiology code. These instructional notes indicate the proper sequencing order of the codes, etiology followed by manifestation. In most cases the manifestation codes will have in the code title, "in diseases classified elsewhere." Codes with this title are a component of the etiology/ manifestation convention. The code title indicates that it is a manifestation code. "In diseases classified elsewhere" codes are never permitted to be used as first listed or principle diagnosis codes. They must be used in conjunction with an underlying condition code and they must be listed following the underlying condition.
@@ -127,6 +143,9 @@ MTH_ET	Metathesaurus entry term
 MTH_FN	MTH Full form of descriptor
 MTH_HT	MTH Hierarchical term
 MTH_IS	Metathesaurus-supplied form of obsolete synonym
+MTH_OAF	Metathesaurus-supplied form of obsolete active fully specified name
+MTH_OAP	Metathesaurus-supplied form of obsolete active preferred term
+MTH_OAS	Metathesaurus-supplied form of obsolete active synonym
 MTH_OF	Metathesaurus-supplied form of obsolete fully specified name
 MTH_OP	Metathesaurus obsolete preferred term
 MTH_PT	Metathesaurus preferred term
@@ -134,7 +153,10 @@ MTH_PTGB	Metathesaurus-supplied form of British preferred term
 MTH_SY	MTH Designated synonym
 MTH_SYGB	Metathesaurus-supplied form of British synonym
 OA	Obsolete abbreviation
+OAF	Obsolete active fully specified name
 OAM	Obsolete Modifier Abbreviation
+OAP	Obsolete active preferred term
+OAS	Obsolete active synonym
 OF	Obsolete fully specified name
 OM	Obsolete modifiers in HCPCS
 OP	Obsolete preferred name

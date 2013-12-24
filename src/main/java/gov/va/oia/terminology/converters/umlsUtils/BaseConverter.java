@@ -886,7 +886,7 @@ public abstract class BaseConverter implements Mojo
 	{
 		ConsoleUtil.println("Creating relationship types");
 		//Both of these get added as extra attributes on the relationship definition
-		HashMap<String, String> snomedCTRelaMappings = new HashMap<>(); //Maps something like 'has_specimen_source_morphology' to '118168003'
+		HashMap<String, ArrayList<String>> snomedCTRelaMappings = new HashMap<>(); //Maps something like 'has_specimen_source_morphology' to '118168003' (may be more than one target SCT code)
 		HashMap<String, String> snomedCTRelMappings = new HashMap<>();  //Maps something like '118168003' to 'RO'
 		
 		nameToRel_ = new HashMap<>();
@@ -907,7 +907,13 @@ public abstract class BaseConverter implements Mojo
 			
 			if (type.equals("snomedct_rela_mapping"))
 			{
-				snomedCTRelaMappings.put(expl,  value);
+				ArrayList<String> targetSCTIDs = snomedCTRelaMappings.get(expl);
+				if (targetSCTIDs == null)
+				{
+					targetSCTIDs = new ArrayList<String>();
+					snomedCTRelaMappings.put(expl, targetSCTIDs);
+				}
+				targetSCTIDs.add(value);
 			}
 			else if (type.equals("snomedct_rel_mapping"))
 			{
@@ -960,7 +966,7 @@ public abstract class BaseConverter implements Mojo
 		
 		HashSet<String> actuallyUsedRelsOrRelas = new HashSet<>();
 		
-		for (Entry<String, String> x : snomedCTRelaMappings.entrySet())
+		for (Entry<String, ArrayList<String>> x : snomedCTRelaMappings.entrySet())
 		{
 			if (!nameToRel_.containsKey(x.getKey()))
 			{
@@ -968,26 +974,42 @@ public abstract class BaseConverter implements Mojo
 				//unless it seems that they should map.
 				if (isRxNorm || sab.startsWith("SNOMEDCT"))
 				{
-					throw new RuntimeException("ERROR - No rel for " + x.getKey() + ".");
+					//may_be_a appears to be a bug in RxNorm 2013-12-02.  silently ignore...
+					//TODO see if they fix it in the future, make this check version specific?
+					if (!x.getKey().equals("may_be_a"))
+					{
+						throw new RuntimeException("ERROR - No rel for " + x.getKey() + ".");
+					}
 				}
-				snomedCTRelMappings.remove(x.getValue());
+				for (String sctId : x.getValue())
+				{
+					snomedCTRelMappings.remove(sctId);
+				}
 			}
 			else
 			{
-				nameToRel_.get(x.getKey()).addSnomedCode(x.getKey(), x.getValue());
-				String relType = snomedCTRelMappings.remove(x.getValue());
-				if (relType != null)
+				for (String sctid : x.getValue())
 				{
-					nameToRel_.get(x.getKey()).addRelType(x.getKey(), relType);
-					//Shouldn't need this, but there are some cases where the metadata is inconsistent - with how it is actually used.
-					actuallyUsedRelsOrRelas.add(relType);
+					nameToRel_.get(x.getKey()).addSnomedCode(x.getKey(), sctid);
+					String relType = snomedCTRelMappings.remove(sctid);
+					if (relType != null)
+					{
+						nameToRel_.get(x.getKey()).addRelType(x.getKey(), relType);
+						//Shouldn't need this, but there are some cases where the metadata is inconsistent - with how it is actually used.
+						actuallyUsedRelsOrRelas.add(relType);
+					}
 				}
 			}
 		}
 		
 		if (snomedCTRelMappings.size() > 0)
 		{
-			throw new RuntimeException("oops");
+			for (Entry<String, String> x : snomedCTRelMappings.entrySet())
+			{
+				ConsoleUtil.printErrorln(x.getKey() + ":" + x.getValue());
+			}
+			throw new RuntimeException("oops - still have (things listed above)");
+			
 		}
 		
 		final PropertyType relationshipGeneric = new BPT_Relations("Relation Types Generic", terminologyName) {};  
@@ -1085,15 +1107,15 @@ public abstract class BaseConverter implements Mojo
 								ptRelationshipMetadata_.getProperty("Inverse General Rel Type").getUUID());
 					}
 					
-					if (r.getRelSnomedCode() != null)
+					for (String sctCode : r.getRelSnomedCode())
 					{
-						eConcepts_.addUuidAnnotation(concept, Type3UuidFactory.fromSNOMED(r.getRelSnomedCode()), 
+						eConcepts_.addUuidAnnotation(concept, Type3UuidFactory.fromSNOMED(sctCode), 
 								ptRelationshipMetadata_.getProperty("Snomed Code").getUUID());
 					}
 					
-					if (r.getInverseRelSnomedCode() != null)
+					for (String sctCode : r.getInverseRelSnomedCode())
 					{
-						eConcepts_.addUuidAnnotation(concept, Type3UuidFactory.fromSNOMED(r.getInverseRelSnomedCode()), 
+						eConcepts_.addUuidAnnotation(concept, Type3UuidFactory.fromSNOMED(sctCode), 
 								ptRelationshipMetadata_.getProperty("Inverse Snomed Code").getUUID());
 					}
 				}

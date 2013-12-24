@@ -16,6 +16,7 @@ RXN_STRENGTH	Strength plus unit of SCDC
 RXN_VET_DRUG	Animal Drug	Drug available for use in animals
 RXTERM_FORM	RxTerm Dose Form Name	The RxTerm dose form name for this drug
 UMLSCUI	UMLS concept unique identifier	
+UMLSAUI	UMLS atom unique identifier	
 UNII_CODE	FDA Unique Ingredient Identifier (UNII) Code	
 
 #RxNorm desc types
