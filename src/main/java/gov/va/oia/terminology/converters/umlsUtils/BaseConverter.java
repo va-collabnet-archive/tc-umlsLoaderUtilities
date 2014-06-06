@@ -976,10 +976,13 @@ public abstract class BaseConverter implements Mojo
 				{
 					//may_be_a appears to be a bug in RxNorm 2013-12-02.  silently ignore...
 					//TODO see if they fix it in the future, make this check version specific?
-					if (!x.getKey().equals("may_be_a"))
-					{
-						throw new RuntimeException("ERROR - No rel for " + x.getKey() + ".");
-					}
+					//seems to be getting worse... now it fails to remove 'has_life_circumstance' too in 2014AA, and a few others.
+					//Changing to a warning.
+					ConsoleUtil.printErrorln("Warning - The 'snomedct_rela_mapping' '" + x.getKey() + "' does not have a corresponding REL entry!  Skipping");
+//					if (!x.getKey().equals("may_be_a") && !x.getKey().equals("has_life_circumstance"))
+//					{
+//						throw new RuntimeException("ERROR - No rel for " + x.getKey() + ".");
+//					}
 				}
 				for (String sctId : x.getValue())
 				{
