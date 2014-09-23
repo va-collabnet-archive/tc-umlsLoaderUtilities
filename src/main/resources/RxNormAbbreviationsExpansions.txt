@@ -29,6 +29,7 @@ GPCK	Generic Drug Delivery Device
 IN	Name for an Ingredient	
 MIN	Name for a Multi-Ingredient	
 PIN	Name from a Precise Ingredient	
+PSN	Prescribable Name	Prescribable Name for many drugs with topical dose forms, including some ointments, gels, and foams
 SBD	Semantic Branded Drug	
 SBDC	Semantic Branded Drug Component	
 SBDF	Semantic Branded Drug and Form	
