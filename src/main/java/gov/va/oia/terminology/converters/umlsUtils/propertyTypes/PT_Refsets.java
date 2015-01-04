@@ -1,12 +1,12 @@
 package gov.va.oia.terminology.converters.umlsUtils.propertyTypes;
 
-import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Refsets;
+import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_MemberRefsets;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.Property;
 
 /**
  * @author Daniel Armbrust
  */
-public class PT_Refsets extends BPT_Refsets
+public class PT_Refsets extends BPT_MemberRefsets
 {
 	public Property ALL;
 	public Property CUI_CONCEPTS;

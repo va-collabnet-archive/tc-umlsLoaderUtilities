@@ -3,10 +3,10 @@ package gov.va.oia.terminology.converters.umlsUtils;
 import gov.va.oia.terminology.converters.sharedUtils.ConsoleUtil;
 import gov.va.oia.terminology.converters.sharedUtils.EConceptUtility;
 import gov.va.oia.terminology.converters.sharedUtils.EConceptUtility.DescriptionType;
-import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Attributes;
+import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Annotations;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_ContentVersion;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Descriptions;
-import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Refsets;
+import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_MemberRefsets;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Relations;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.ConceptCreationNotificationListener;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.Property;
@@ -56,7 +56,7 @@ public abstract class BaseConverter implements Mojo
 	protected HashMap<String, PropertyType> ptTermAttributes_ = new HashMap<>();
 	protected PropertyType ptIds_;
 	protected PT_Refsets ptUMLSRefsets_;
-	protected HashMap<String, BPT_Refsets> ptRefsets_ = new HashMap<>();
+	protected HashMap<String, BPT_MemberRefsets> ptRefsets_ = new HashMap<>();
 	protected BPT_ContentVersion ptContentVersion_;
 	protected PropertyType ptSTypes_;
 	protected PropertyType ptSuppress_;
@@ -100,7 +100,7 @@ public abstract class BaseConverter implements Mojo
 	 * If sabList is null or empty, no sab filtering is done. 
 	 */
 	protected void init(File outputDirectory, String pathPrefix, String tablePrefix, PropertyType ids, PropertyType attributes, 
-			Collection<String> sabList, List<String> additionalRootConcepts) throws Exception
+			Collection<String> sabList, List<String> additionalRootConcepts, long defaultTime) throws Exception
 	{
 		clearTargetFiles(outputDirectory);
 		tablePrefix_ = tablePrefix;
@@ -157,7 +157,7 @@ public abstract class BaseConverter implements Mojo
 		File binaryOutputFile = new File(outputDirectory, "RRF-" + tablePrefix + ".jbin");
 
 		dos_ = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(binaryOutputFile)));
-		eConcepts_ = new EConceptUtility(namespaceSeed_, pathPrefix + " Path", dos_);
+		eConcepts_ = new EConceptUtility(namespaceSeed_, pathPrefix + " Path", dos_, defaultTime);
 
 		UUID archRoot = ArchitectonicAuxiliary.Concept.ARCHITECTONIC_ROOT_CONCEPT.getPrimoridalUid();
 		metaDataRoot_ = ConverterUUID.createNamespaceUUIDFromString("metadata");
@@ -207,7 +207,7 @@ public abstract class BaseConverter implements Mojo
 		checkRelationships();
 		satRelStatement_.close();
 		eConcepts_.storeRefsetConcepts(ptUMLSRefsets_, dos_);
-		for (BPT_Refsets r : ptRefsets_.values())
+		for (BPT_MemberRefsets r : ptRefsets_.values())
 		{
 			eConcepts_.storeRefsetConcepts(r, dos_);
 		}
@@ -252,7 +252,7 @@ public abstract class BaseConverter implements Mojo
 	}
 	
 	protected abstract void loadCustomMetaData() throws Exception;
-	protected abstract void addCustomRefsets(BPT_Refsets refset) throws Exception;
+	protected abstract void addCustomRefsets(BPT_MemberRefsets refset) throws Exception;
 	
 	private void loadMetaData(List<String> additionalRootConcepts) throws Exception
 	{
@@ -645,8 +645,8 @@ public abstract class BaseConverter implements Mojo
 			//dynamically add more attributes from *DOC
 			{
 				ConsoleUtil.println("Creating attribute types");
-				PropertyType attributes = new BPT_Attributes() {};
-				attributes.indexByAltNames();
+				PropertyType annotations = new BPT_Annotations() {};
+				annotations.indexByAltNames();
 				
 				Statement s = db_.getConnection().createStatement();
 				//extra logic at the end to keep NDC's from any sab when processing RXNorm
@@ -678,25 +678,25 @@ public abstract class BaseConverter implements Mojo
 					if (ae == null)
 					{
 						ConsoleUtil.printErrorln("No Abbreviation Expansion found for " + abbreviation);
-						attributes.addProperty(abbreviation, preferredName, description);
+						annotations.addProperty(abbreviation, preferredName, description);
 					}
 					else
 					{
-						attributes.addProperty(ae.getExpansion(), null, ae.getAbbreviation(), ae.getDescription());
+						annotations.addProperty(ae.getExpansion(), null, ae.getAbbreviation(), ae.getDescription());
 					}
 				}
 				if (isRxNorm)
 				{
-					attributes.addProperty("UMLSAUI");  //TODO bug in RxNorm - This property should be in RXNDOC, but it is currently missing - bug in the data  
+					annotations.addProperty("UMLSAUI");  //TODO bug in RxNorm - This property should be in RXNDOC, but it is currently missing - bug in the data  
 				}
 				rs.close();
 				s.close();
 				
-				if (attributes.getProperties().size() > 0)
+				if (annotations.getProperties().size() > 0)
 				{
-					eConcepts_.loadMetaDataItems(attributes, termSpecificMetadataRoot, dos_);
+					eConcepts_.loadMetaDataItems(annotations, termSpecificMetadataRoot, dos_);
 				}
-				ptTermAttributes_.put(sab, attributes);
+				ptTermAttributes_.put(sab, annotations);
 			}
 			
 			
@@ -791,7 +791,7 @@ public abstract class BaseConverter implements Mojo
 			}
 			
 			//Make a refset
-			BPT_Refsets refset = new BPT_Refsets(terminologyName);
+			BPT_MemberRefsets refset = new BPT_MemberRefsets(terminologyName);
 			terminologyCodeRefsetPropertyName_.put(sab, "All " + terminologyName + " Concepts");
 			refset.addProperty(terminologyCodeRefsetPropertyName_.get(sab));
 			addCustomRefsets(refset);
