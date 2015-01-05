@@ -1083,8 +1083,11 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 					
 					if (r.getAltName() != null)
 					{
+						//Need to create this UUID to be different that forward name, in case forward and reverse are identical (like 'RO')
+						UUID descUUID = ConverterUUID.createNamespaceUUIDFromStrings(concept.getPrimordialUuid().toString(), r.getInverseFSNName(), 
+								DescriptionType.SYNONYM.name(), "false", "inverse");
 						//Yes, this looks funny, no its not a copy/paste error.  We swap the FSN and alt names for... it a long story.  42.
-						eConcepts_.addDescription(concept, r.getInverseFSNName(), DescriptionType.SYNONYM, false, null, 
+						eConcepts_.addDescription(concept, descUUID, r.getInverseFSNName(), DescriptionType.SYNONYM, false, null, 
 								ptRelationshipMetadata_.getProperty("Inverse Synonym").getUUID(), false);
 					}
 					
