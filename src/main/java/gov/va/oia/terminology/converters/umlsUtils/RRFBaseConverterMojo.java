@@ -1,6 +1,7 @@
 package gov.va.oia.terminology.converters.umlsUtils;
 
 import gov.va.oia.terminology.converters.sharedUtils.ConsoleUtil;
+import gov.va.oia.terminology.converters.sharedUtils.ConverterBaseMojo;
 import gov.va.oia.terminology.converters.sharedUtils.EConceptUtility;
 import gov.va.oia.terminology.converters.sharedUtils.EConceptUtility.DescriptionType;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Annotations;
@@ -36,7 +37,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.maven.plugin.Mojo;
 import org.apache.maven.plugin.logging.Log;
 import org.dwfa.cement.ArchitectonicAuxiliary;
 import org.dwfa.util.id.Type3UuidFactory;
@@ -46,7 +46,7 @@ import org.ihtsdo.tk.dto.concept.component.refex.type_string.TkRefsetStrMember;
 import org.ihtsdo.tk.dto.concept.component.refex.type_uuid.TkRefexUuidMember;
 import org.ihtsdo.tk.dto.concept.component.relationship.TkRelationship;
 
-public abstract class BaseConverter implements Mojo
+public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 {
 	//Used for UMLS metadata, and all of RxNorm
 	protected String namespaceSeed_;

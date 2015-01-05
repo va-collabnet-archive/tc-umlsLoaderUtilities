@@ -1,6 +1,6 @@
 package gov.va.oia.terminology.converters.umlsUtils.rrf;
 
-import gov.va.oia.terminology.converters.umlsUtils.BaseConverter;
+import gov.va.oia.terminology.converters.umlsUtils.RRFBaseConverterMojo;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -17,7 +17,7 @@ public class REL
 	
 	private boolean snomedSpecialHandling_ = false;
 	
-	public static List<REL> read(String sourceSab, ResultSet rs, boolean lookedUp2, BaseConverter bc) throws SQLException
+	public static List<REL> read(String sourceSab, ResultSet rs, boolean lookedUp2, RRFBaseConverterMojo bc) throws SQLException
 	{
 		ArrayList<REL> result = new ArrayList<>();
 		while (rs.next())
@@ -28,7 +28,7 @@ public class REL
 		return result;
 	}
 	
-	private REL(String sourceSab, ResultSet rs, boolean lookedUp2, BaseConverter bc) throws SQLException
+	private REL(String sourceSab, ResultSet rs, boolean lookedUp2, RRFBaseConverterMojo bc) throws SQLException
 	{
 		sourceSAB = sourceSab;
 		lookedUp2_ = lookedUp2;
@@ -212,7 +212,7 @@ public class REL
 		return relHash_;
 	}
 	
-	public UUID getInverseRelHash(BaseConverter bc)
+	public UUID getInverseRelHash(RRFBaseConverterMojo bc)
 	{
 		//reverse the direction of the rels, and the source/target
 		String relInverse = bc.nameToRel_.get(rel).getFSNName();
