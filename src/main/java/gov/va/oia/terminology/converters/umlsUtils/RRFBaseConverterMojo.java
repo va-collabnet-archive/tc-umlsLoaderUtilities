@@ -1323,12 +1323,12 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 				if (relType.getWBTypeUUID() == null)
 				{
 					r = eConcepts_.addRelationship(concept, (duplicateRels.get(0).getRui() != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + duplicateRels.get(0).getRui()) : null),
-							duplicateRels.get(0).getTargetUUID(), relType.getUUID(), null, null, null);
+							duplicateRels.get(0).getTargetUUID(), relType.getUUID(), null, null, null, null);
 				}
 				else  //need to swap out to the wb rel type (usually, isa)
 				{
 					r = eConcepts_.addRelationship(concept, (duplicateRels.get(0).getRui() != null ? ConverterUUID.createNamespaceUUIDFromString("RUI:" + duplicateRels.get(0).getRui()) : null),
-							duplicateRels.get(0).getTargetUUID(), relType.getWBTypeUUID(), relType.getUUID(), relType.getPropertyType().getPropertyTypeReferenceSetUUID(), null);
+							duplicateRels.get(0).getTargetUUID(), relType.getWBTypeUUID(), relType.getUUID(), relType.getPropertyType().getPropertyTypeReferenceSetUUID(), null, null);
 				}
 				
 				if (!isRxNorm)
